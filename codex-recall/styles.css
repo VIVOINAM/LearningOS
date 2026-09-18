@@ -1,0 +1,5 @@
+.cr-review{box-sizing:border-box;display:flex;flex-direction:column;gap:14px;min-width:0;max-height:calc(100vh - 48px);overflow:hidden;padding-bottom:10px;color:var(--text-normal)}
+.modal:has(.cr-review){max-height:calc(100vh - 32px);}
+.modal:has(.cr-review) .modal-content{box-sizing:border-box;min-width:0;}
+.cr-review h2,.cr-review p{margin:0;overflow-wrap:anywhere}.cr-answer{flex:1;min-height:120px;overflow:auto;overscroll-behavior:contain;line-height:1.7;padding:0 2px 8px;overflow-wrap:anywhere}
+.cr-ratings{display:flex;flex-wrap:wrap;gap:8px}.cr-ratings button{flex:1;min-height:36px}

@@ -1,0 +1,217 @@
+"use strict";
+
+/** CODEX 3.0 workbench onload smoke test with a minimal DOM mock. */
+
+const fs = require("node:fs");
+const path = require("node:path");
+const Module = require("node:module");
+const assert = require("node:assert/strict");
+
+const ROOT = path.resolve(__dirname, "..");
+const PLUGIN_ROOT = path.join(ROOT, "dist", "plugins");
+
+function fakeElement(tag = "div") {
+  const element = {
+    tagName: String(tag).toUpperCase(),
+    children: [],
+    className: "",
+    textContent: "",
+    value: "",
+    hidden: false,
+    disabled: false,
+    dataset: {},
+    style: { setProperty() {}, removeProperty() {}, cssText: "" },
+    classList: { add() {}, remove() {}, toggle() {}, contains() { return false; } },
+    setAttribute() {},
+    getAttribute() { return null; },
+    appendChild(child) { this.children.push(child); return child; },
+    insertBefore(child) { this.children.push(child); return child; },
+    replaceChildren() { this.children = []; },
+    addEventListener() {},
+    removeEventListener() {},
+    querySelector() { return null; },
+    querySelectorAll() { return []; },
+    closest() { return null; },
+    focus() {},
+    click() {},
+    getBoundingClientRect() { return { left: 0, top: 0, right: 0, bottom: 0, width: 0, height: 0 }; },
+    empty() { this.children = []; },
+    remove() {},
+    set onclick(value) { this._onclick = value; },
+    get onclick() { return this._onclick; },
+  };
+  return element;
+}
+
+global.document = {
+  createElement: (tag) => fakeElement(tag),
+  createElementNS: (_ns, tag) => fakeElement(tag),
+  createTextNode: (text) => ({ textContent: String(text) }),
+  querySelector: () => null,
+  addEventListener() {},
+  removeEventListener() {},
+};
+global.window = { setInterval: () => 0, clearInterval: () => {}, addEventListener() {}, dispatchEvent() {} };
+
+class MockFile {
+  constructor(filePath, content = "") {
+    this.path = filePath;
+    this.content = content;
+    this.basename = filePath.split("/").pop().replace(/\.[^.]+$/, "");
+    this.extension = filePath.split(".").pop();
+    this.stat = { mtime: Date.now(), ctime: Date.now(), size: content.length };
+  }
+}
+
+class MockPlugin {
+  constructor(app, manifest) { this.app = app; this.manifest = manifest || {}; this.__data = null; }
+  async loadData() { return this.__data; }
+  async saveData(data) { this.__data = data; }
+  addCommand() {}
+  addRibbonIcon() {}
+  registerInterval() {}
+  registerEvent() {}
+  registerDomEvent() {}
+  register() {}
+  registerView(type, factory) { this.__views = this.__views || {}; this.__views[type] = factory; }
+  registerMarkdownPostProcessor() {}
+  addStatusBarItem() { return fakeElement("div"); }
+}
+
+class MockVault {
+  constructor(legacy) {
+    this.legacy = legacy;
+    this.files = new Map();
+    // 同 smoke-lifecycle：codex-study 的元数据走 vault.adapter，stub 需要 exists 与真正的写入。
+    this.written = new Map();
+    this.adapter = {
+      exists: async (p) => this.written.has(p) || this.files.has(p),
+      read: async (p) => {
+        if (this.written.has(p)) return this.written.get(p);
+        if (p === ".obsidian/plugins/codex-workbench/data.json" && this.legacy) return JSON.stringify(this.legacy);
+        const error = new Error(`ENOENT: ${p}`);
+        error.code = "ENOENT";
+        throw error;
+      },
+      // 真实 Vault 里 adapter.write 出来的文件同样会被索引到，stub 要保持这一点。
+      write: async (p, text) => {
+        this.written.set(p, text);
+        const file = this.files.get(p);
+        if (file && !file.folder) file.content = text;
+        else this.files.set(p, new MockFile(p, text));
+      },
+    };
+  }
+  on() { return {}; }
+  getAbstractFileByPath(p) { return this.files.get(p) || null; }
+  createFolder(p) { if (this.files.has(p)) throw new Error("Folder already exists"); this.files.set(p, { path: p, folder: true }); }
+  async create(p, text) { if (this.files.has(p)) throw new Error("File already exists"); const file = new MockFile(p, text); this.files.set(p, file); return file; }
+  async process(file, fn) { file.content = fn(file.content || ""); return file; }
+  async cachedRead(file) { return file.content || ""; }
+  getMarkdownFiles() { return [...this.files.values()].filter((file) => file.path.endsWith(".md")); }
+  getFiles() { return [...this.files.values()]; }
+}
+
+const obsidian = {
+  parseYaml: text => Object.fromEntries(text.split('\n').filter(s=>s.includes(':')).map(s=>{const i=s.indexOf(':');return [s.slice(0,i).trim(),s.slice(i+1).trim()];})),
+  Plugin: MockPlugin,
+  ItemView: class ItemView { constructor(leaf) { this.leaf = leaf; this.containerEl = fakeElement(); this.contentEl = fakeElement(); } registerEvent() {} },
+  Modal: class Modal { constructor(app) { this.app = app; this.contentEl = fakeElement(); } open() {} close() {} },
+  Notice: class Notice {},
+  Menu: class Menu {},
+  setIcon: () => {},
+  requestUrl: async () => ({ json: { current: { temperature_2m: 20, weather_code: 0 } } }),
+};
+const originalLoad = Module._load;
+Module._load = function (request, parent, isMain) {
+  if (request === "obsidian") return obsidian;
+  return originalLoad.apply(this, arguments);
+};
+
+function makeApp(legacy) {
+  const vault = new MockVault(legacy);
+  const plugins = {};
+  const app = {
+    vault,
+    plugins: { plugins, getPlugin: (id) => plugins[id] || null },
+    workspace: {
+      onLayoutReady: (fn) => fn(),
+      on: () => ({}),
+      trigger: () => {},
+      getLeavesOfType: () => [],
+      getLeaf: () => ({ setViewState: async () => {} }),
+      revealLeaf: async () => {},
+      openLinkText: async () => {},
+      activeLeaf: null,
+    },
+    metadataCache: { on: () => ({}), getFileCache: () => null },
+  };
+  return app;
+}
+
+function load(id) {
+  const built = path.join(PLUGIN_ROOT, id, "main.js");
+  delete require.cache[require.resolve(built)];
+  return require(built);
+}
+
+async function main() {
+  const legacy = {
+    focusMinutes: 50,
+    breakMinutes: 10,
+    priorities: { [new Date().toISOString().slice(0, 10)]: "重要事项" },
+    countdown: { title: "学期结束", date: "2026-12-22" },
+  };
+  const app = makeApp(legacy);
+  app.vault.files.set("00 工作台/今日任务.md", new MockFile("00 工作台/今日任务.md", "# 今日任务\n\n- [ ] 复习数学分析\n- [ ] 整理流体笔记 <!-- plan:%7B%22estimate%22%3A2%7D -->\n"));
+  app.vault.files.set("01 收件箱/收件箱.md", new MockFile("01 收件箱/收件箱.md", "# 收件箱\n\n## 2026-09-12 10:00\n\n一个想法\n"));
+  app.vault.files.set("book/a.pdf", new MockFile("book/a.pdf", ""));
+  app.vault.files.set("03 知识库/note.md", new MockFile("03 知识库/note.md", "# 笔记\n"));
+  app.vault.files.set("02 项目/proj.md", new MockFile("02 项目/proj.md", "---\ntype: project\nstatus: 进行中\nnext: 写下一章\ndue: 2026-09-20\n---\n# 项目\n"));
+
+  const Focus = load("codex-focus");
+  const focus = new Focus(app, { id: "codex-focus", version: "3.0.0" });
+  app.plugins.plugins["codex-focus"] = focus;
+  await focus.onload();
+
+  const Study = load("codex-study");
+  const study = new Study(app, { id: "codex-study", version: "3.0.0" });
+  app.plugins.plugins["codex-study"] = study;
+  await study.onload();
+
+  const Capture = load("codex-capture");
+  const capture = new Capture(app, { id: "codex-capture", version: "3.0.0" });
+  app.plugins.plugins["codex-capture"] = capture;
+  await capture.onload();
+
+  const Workbench = load("codex-workbench");
+  const workbench = new Workbench(app, { id: "codex-workbench", version: "4.1.1" });
+  workbench.__data = { ...legacy, lastTextbook: "book/a.pdf" };
+  app.plugins.plugins["codex-workbench"] = workbench;
+  await workbench.onload();
+  await new Promise((resolve) => setTimeout(resolve, 20));
+
+  assert.equal(workbench.focus, focus, "workbench should bind codex-focus");
+  assert.equal(workbench.study, study.engine, "workbench should bind codex-study engine");
+  assert.equal(workbench.data.timer.task, "", "timer proxy should read focus state");
+  assert.equal(workbench.data.focusMinutes, 50, "focus settings should migrate from legacy workbench data");
+  assert.equal(workbench.refreshWeather, undefined, "V4 removes weather networking");
+  const factory = workbench.__views && workbench.__views["codex-workbench"];
+  assert.ok(factory, "workbench should register console view factory");
+  const leaf = { view: null };
+  const view = factory(leaf);
+  await view.onOpen();
+  assert.ok(view.content && view.content.children.length > 0, "console view should render cards");
+  view.tick();
+  for (const tab of ["today", "tasks", "study", "heatmap", "knowledge", "review"]) {
+    view.tab = tab;
+    await view.refresh();
+    assert.ok(view.content.children.length > 0, `tab ${tab} should render`);
+  }
+  view.onClose();
+  console.log("workbench onload smoke：通过");
+}
+
+main()
+  .then(() => process.exit(0))
+  .catch((error) => { console.error(error.stack || error.message); process.exit(1); });

@@ -1,0 +1,86 @@
+/* Learning OS 设计令牌 —— 唯一定义处。
+ *
+ * tools/build.js 在构建时把本文件内联到每个插件 styles.css 的最前面，
+ * 插件样式只消费 var(--os-*)，不再写具体色值。
+ *
+ * 此前有三套并行：design/00-tokens.css（夜航蓝）自称唯一真相源却被零个文件
+ * 引用、对应的 snippet 也从未启用；workbench/styles.css 就地定义一套暖纸
+ * --os-*；codex-study 自己在 .cw-study-host 上定义 --cw-accent:#ad5739，
+ * 而它的弹窗写 #a34b2d——同一个插件里两个橙。study 还完全没有深色分支，
+ * 夜间读 PDF 时面板仍是浅色。
+ *
+ * 定义在 :root 与 body.theme-dark 上，自定义属性会继承下去，所有插件都能用。
+ * 工作台在 @container 查询里按尺寸重定义字号，那是布局层的事，留在它自己的
+ * styles.css 里——那里改的是 .os-root，对视图内后代生效，不会回头影响别人。
+ */
+
+:root {
+  --os-bg: #e8e1d7;
+  --os-paper: #fffaf3;
+  --os-soft: #dcd4c6;
+  --os-line: #c6b9a8;
+  --os-ink: #3d3029;
+  --os-muted: #6a5749;
+  --os-accent: #a34b2d;
+  --os-accent-hover: #843a22;
+  --os-rail: #ded5c7;
+  --os-focus: #e8d7bf;
+  --os-danger: #a33324;
+
+  /* 排版只留四级，加一个计时器专用展示号。
+     5.4.0 之前散落 22 种字号，差 1px 的相邻值到处都是。 */
+  --fs-display: 28px;
+  --fs-title: 17px;
+  --fs-body: 13px;
+  --fs-meta: 11px;
+  --fs-timer: 80px;
+
+  /* 标注色。同一个命名颜色在三个位置用三个值：PDF 上的高亮线要够深才看得见，
+     卡片上的文字标签要更深才够对比度，调色按钮要更浅才不抢眼。
+     这里只是把散落四处的字面值收成命名令牌，没有改任何一个值——
+     三套值是否真该不同是设计问题，留给 6.1 决定，见 docs/设计系统.md。 */
+  --os-mark-yellow: #d6a915;
+  --os-mark-coral: #e46f61;
+  --os-mark-mint: #57b982;
+  --os-mark-blue: #3974a6;
+  --os-mark-purple: #8d6bc0;
+
+  --os-mark-yellow-text: #a77800;
+  --os-mark-coral-text: #b84a45;
+  --os-mark-mint-text: #3b8757;
+  --os-mark-blue-text: #3974a6;
+  --os-mark-purple-text: #7653a6;
+
+  /* 学习热力图的五级色阶。 */
+  --os-heat-0: #eadfd1;
+  --os-heat-1: #e9c6af;
+  --os-heat-2: #d99572;
+  --os-heat-3: #be6743;
+  --os-heat-4: #9d3f27;
+
+  --os-mark-yellow-chip: #f2cc4d;
+  --os-mark-coral-chip: #ee8a7c;
+  --os-mark-mint-chip: #83d6a7;
+  --os-mark-blue-chip: #78bdec;
+  --os-mark-purple-chip: #b49add;
+}
+
+body.theme-dark {
+  --os-bg: #1e1814;
+  --os-paper: #342a21;
+  --os-soft: #453729;
+  --os-line: #6a5544;
+  --os-ink: #f4e6d5;
+  --os-muted: #c2aa91;
+  --os-accent: #e6a27d;
+  --os-accent-hover: #f2bd9e;
+  --os-rail: #241d17;
+  --os-focus: #413123;
+  --os-danger: #ffad91;
+
+  --os-heat-0: #403328;
+  --os-heat-1: #634536;
+  --os-heat-2: #90604b;
+  --os-heat-3: #bc7759;
+  --os-heat-4: #e6a27d;
+}

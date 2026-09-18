@@ -1,0 +1,8 @@
+{
+  "id": "codex-capture",
+  "name": "Codex 快速捕获",
+  "minAppVersion": "1.5.0",
+  "description": "自建 Markdown 任务索引、今日安排、安全写回与快捷捕获。",
+  "author": "Codex",
+  "isDesktopOnly": false
+}

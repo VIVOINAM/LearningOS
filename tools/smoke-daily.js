@@ -1,0 +1,20 @@
+const assert=require('node:assert/strict'),Module=require('node:module');
+const original=Module._load;Module._load=function(name){if(name==='obsidian')return {Plugin:class{},ItemView:class{},Modal:class{},Notice:class{},parseYaml:JSON.parse};return original.apply(this,arguments);};
+const W=require('../codex-workbench/main'),Focus=require('../codex-focus/main'),core=require('../shared/timer-core');
+(async()=>{
+ const key='2026-09-14',files=new Map(),tasks=[{id:'a',text:'A',path:'02 项目/P.md',scheduled:key,done:false},{id:'b',text:'B',path:'00 工作台/今日任务.md',scheduled:key,done:true,doneDate:key}];
+ const p=Object.create(W.prototype);p.queue=Promise.resolve();p.timerCore=core;p.data={timer:core.initial(),sessions:[]};
+ const make=path=>{if(!files.has(path))files.set(path,{path,extension:'md',basename:path.split('/').pop(),text:'---\n{}\n---\n原有手写内容\n',fm:{}});return files.get(path);};
+ p.app={vault:{getAbstractFileByPath:path=>files.get(path),getMarkdownFiles:()=>[],cachedRead:async f=>f.text,process:async(f,fn)=>f.text=fn(f.text)},metadataCache:{getFileCache:f=>({frontmatter:f.fm})},fileManager:{processFrontMatter:async(f,fn)=>{fn(f.fm);f.text=f.text.replace(/^---\n.*?\n---/,()=>`---\n${JSON.stringify(f.fm)}\n---`);}}};
+ p.daily=async t=>make('05 日记/'+require('../codex-workbench/console-model').dayKey(t)+'.md');
+ let fail=false;p.captureOwner=()=>({index:{all:async()=>tasks},patchTask:async(t,patch)=>{if(fail)throw Error('disk full');Object.assign(t,patch);return t;}});
+ p.focusSelection={select:async(t,next)=>{p.next={t,next};return t;}};
+ const f=await p.daily(new Date(key+'T12:00:00').getTime());await p.saveDailyFeedback(f,'aha','学会切片');await p.saveDailyFeedback(f,'energy','4');await assert.rejects(p.saveDailyFeedback(f,'energy','6'));
+ await p.syncDailySummary(new Date(key+'T12:00:00').getTime());assert.match(f.text,/原有手写内容/);assert.match(f.text,/> 学会切片/);const before=f.text;await p.syncDailySummary(new Date(key+'T12:00:00').getTime());assert.equal(f.text,before);
+ fail=true;await assert.rejects(p.rolloverDaily(key));assert.equal(tasks[0].scheduled,key);fail=false;await p.rolloverDaily(key);assert.equal(tasks[0].scheduled,'2026-09-15');assert.equal((await p.dailyAudit(key)).pending.length,1);await p.rolloverDaily(key);assert.equal((await p.dailyAudit(key)).pending.length,1);
+ await p.setTomorrow(key,tasks[0]);assert.equal(p.next.next,'2026-09-15');assert.equal(f.fm.tomorrow_task_id,'a');assert.equal(f.fm.energy,'4');
+ tasks.push({id:'c',text:'C',path:'00 工作台/今日任务.md',scheduled:key});await p.setTomorrow(key,tasks[2]);assert.equal(tasks[2].scheduled,'2026-09-15');assert.ok((await p.dailyAudit(key)).pending.some(t=>t.id==='c'));
+ const focus=Object.create(Focus.prototype);focus.operations=Promise.resolve();focus.app={workspace:{trigger(){}}};focus.data={timer:core.start(core.initial({taskId:'a'}),'A',1500),sessions:[],settings:{focusMinutes:25}};focus.save=async()=>{throw Error('disk full');};const initial=JSON.stringify(focus.data);await assert.rejects(focus.dispatch('switch',{taskId:'b',task:'B'}));assert.equal(JSON.stringify(focus.data),initial);
+ focus.save=async()=>{};await focus.dispatch('switch',{taskId:'b',task:'B',project:'P'});assert.equal(focus.data.timer.taskId,'b');assert.equal(focus.data.timer.switches.length,1);
+ console.log('每日小结与结转集成通过： feedback preservation, idempotent summary, rollover failure/retry/history, tomorrow focus, switch rollback.');
+})().catch(e=>{console.error(e);process.exitCode=1;});

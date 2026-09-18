@@ -1,0 +1,20 @@
+{
+  "name": "codex-workbench-dev",
+  "private": true,
+  "version": "6.3.0",
+  "description": "Learning OS 插件开发与发布",
+  "scripts": {
+    "test": "node tools/test.js",
+    "test:node": "node --test",
+    "check": "node tools/check.js",
+    "build": "node tools/build.js",
+    "smoke": "node tools/smoke.js",
+    "verify": "node tools/verify.js",
+    "deploy": "node tools/deploy.js",
+    "verify:stage": "node tools/verify.js",
+    "smoke:lifecycle": "node tools/smoke-lifecycle.js",
+    "smoke:workbench": "node tools/smoke-workbench.js",
+    "smoke:owners": "node tools/smoke-owners.js",
+    "test:visual": "node tools/smoke-visual.cjs"
+  }
+}
