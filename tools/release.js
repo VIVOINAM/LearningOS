@@ -47,7 +47,7 @@ function die(message) {
 }
 
 function git(...argv) {
-  const result = spawnSync("git", argv, { cwd: VAULT, encoding: "utf8" });
+  const result = spawnSync("git", argv, { cwd: ROOT, encoding: "utf8" });
   if (result.error) die(`git ${argv[0]} 无法执行：${result.error.message}`);
   return result;
 }
