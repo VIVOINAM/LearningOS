@@ -1,7 +1,7 @@
 {
   "name": "codex-workbench-dev",
   "private": true,
-  "version": "6.3.0",
+  "version": "7.0.0",
   "description": "Learning OS 插件开发与发布",
   "scripts": {
     "test": "node tools/test.js",
