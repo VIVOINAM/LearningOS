@@ -161,6 +161,35 @@ body.cs-immersive .cw-study-reopen:hover,body.cs-immersive .cw-study-reopen:focu
 .cs-card.is-active .cs-card-quote{-webkit-line-clamp:8;border-left-color:var(--interactive-accent)}
 .cs-empty-jump{display:block!important;margin-top:6px;padding:0!important;background:transparent!important;box-shadow:none!important;color:var(--interactive-accent)!important;font-size:11px!important;text-align:left}
 
+/* 6.8 统一玻璃材质：阅读侧栏、浮动工具条、卡片与学习弹窗共用工作台令牌。 */
+.cw-study-panel.cs-inspector{
+  background:var(--os-glass-strong);
+  -webkit-backdrop-filter:var(--os-glass-blur);backdrop-filter:var(--os-glass-blur);
+  border-left-color:var(--os-glass-lit);box-shadow:var(--os-glass-inset),-12px 0 34px rgba(32,24,18,.08);
+}
+.cs-inspector-head,.cw-study-panel .cs-page-label{
+  background:var(--os-glass-strong);
+  -webkit-backdrop-filter:var(--os-glass-blur);backdrop-filter:var(--os-glass-blur);
+}
+.cw-study-panel :is(.cw-study-search,.cs-formula-input),
+:is(.cw-annotation-modal,.cw-study-goal-modal,.cs-library,.cw-study-overview-modal) :is(input,textarea,select){
+  background:var(--os-glass-field);border-color:var(--os-glass-shade);box-shadow:var(--os-glass-inset);
+}
+.cw-study-panel .cs-card:hover,.cw-study-panel .cs-card.is-active,
+.cs-formula-preview,.cw-annotation-quote,.cw-latex-preview{background:var(--os-glass-soft)}
+.cs-selection-toolbar{
+  background:var(--os-glass-strong);-webkit-backdrop-filter:var(--os-glass-blur);backdrop-filter:var(--os-glass-blur);
+  border-color:var(--os-glass-lit);box-shadow:var(--os-glass-inset),var(--os-glass-drop);
+}
+:is(.modal:has(.cw-annotation-modal),.modal:has(.cw-study-goal-modal),.modal:has(.cs-library),.modal:has(.cw-study-overview-modal)){
+  background:var(--os-glass-strong);
+  -webkit-backdrop-filter:var(--os-glass-blur);backdrop-filter:var(--os-glass-blur);
+  border:1px solid var(--os-glass-shade);border-top-color:var(--os-glass-lit);border-left-color:var(--os-glass-lit);
+  box-shadow:var(--os-glass-inset),0 24px 64px rgba(32,24,18,.18);
+}
+:is(.modal:has(.cw-annotation-modal),.modal:has(.cw-study-goal-modal),.modal:has(.cs-library),.modal:has(.cw-study-overview-modal)) .modal-content{background:transparent}
+.cw-annotation-header{background:var(--os-glass-strong);-webkit-backdrop-filter:var(--os-glass-blur);backdrop-filter:var(--os-glass-blur)}
+
 
 /* Obsidian 的状态栏浮在右下角，会盖住抽屉最底下那一行（按钮或最后一张卡片）。
    给滚动容器垫一段底，两个视图都能滑到真正的底。 */

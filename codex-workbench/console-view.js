@@ -36,6 +36,27 @@ const resolveTab = (id) => (SECTIONS_OF.has(id) ? SECTIONS_OF.get(id)[0] : id);
 const STUDY_TABS = {courses:'courses', books:'books', questions:'questions'};
 // 历史 consoleTab：V5.1 及更早的 study/review，以及 V5.2 的 review + consoleReviewPane。
 const LEGACY_TABS = {study:'courses', review:'recall'};
+// 三档模式：[id, 标签, phase, 分钟]。短休和长休共用 break——
+// timer-core 的 PHASES 只有 focus/break，加第三个要动共享状态机和它的迁移。
+const FOCUS_MODES = [['focus','专注 25m','focus',25],['short','短休 5m','break',5],['long','长休 15m','break',15]];
+const FOCUS_TARGET = 4;
+// 进度环的几何。半径 46、线宽 1.5，留 4 的余量给末端那颗圆点不被裁掉。
+const DIAL_R = 46;
+const DIAL_LEN = 2 * Math.PI * DIAL_R;
+// 圆点放进一个绕中心旋转的组里，而不是每拍改 cx/cy。
+// 改坐标的话，两点之间的过渡走的是直线——圆点会横穿圆盘内部抄近路，
+// 而不是贴着弧线走。旋转一个组，运动轨迹天然就是那条弧。
+// 组的基准位置在 3 点钟方向（未旋转坐标系），SVG 整体有 -90° 的 CSS 旋转，
+// 所以渲染出来落在 12 点——和 <circle> 的描边起点一致。
+const DIAL_SVG = `<svg class="os-dial-svg" viewBox="0 0 100 100" aria-hidden="true">
+  <circle class="os-dial-track" cx="50" cy="50" r="${DIAL_R}"/>
+  <circle class="os-dial-arc" data-arc cx="50" cy="50" r="${DIAL_R}"
+    stroke-dasharray="${DIAL_LEN}" stroke-dashoffset="0"/>
+  <g class="os-dial-bead-wrap" data-bead>
+    <circle class="os-dial-glow" cx="${50 + DIAL_R}" cy="50" r="5.4"/>
+    <circle class="os-dial-bead" cx="${50 + DIAL_R}" cy="50" r="2.6"/>
+  </g>
+</svg>`;
 const MODULES = [['codex-capture','行动与捕获'],['codex-focus','专注计时'],['codex-study','PDF 学习'],['codex-recall','间隔复习'],['codex-workbench','工作台']];
 const btn = (parent, label, action, cls = '') =>
   domBtn(parent, label, action, `os-button ${cls}`, error => new Notice(error.message || String(error)));
@@ -43,6 +64,14 @@ function input(parent, placeholder, value = '') {
   const e = el(parent, 'input', 'os-input'); e.type = 'text'; e.placeholder = placeholder; e.value = value; e.setAttribute('aria-label', placeholder); return e;
 }
 function title(path) { return String(path || '').split('/').pop().replace(/\.(md|pdf)$/i, ''); }
+/**
+ * 内容没变就不写。
+ *
+ * textContent 赋值会拆掉旧的文本节点再建一个，即使字符串一模一样——
+ * 这些调用全在每秒一次的 tick 路径上，于是一堆一秒都不会变的文字
+ * （按钮标签、任务标题、项目名）每秒重绘一次。带渐变和阴影的按钮尤其明显。
+ */
+function setText(node, value) { if (node && node.textContent !== value) node.textContent = value; }
 function clock(seconds) { const n = Math.max(0, Math.ceil(seconds || 0)); return `${String(Math.floor(n/60)).padStart(2,'0')}:${String(n%60).padStart(2,'0')}`; }
 function noteFile(f) { return f.extension === 'md' && !/^(\.|08 插件开发\/|99 模板\/|版本管理\/)/.test(f.path); }
 function previewText(text, heading = '') { return String(text || '').replace(/^---\r?\n[\s\S]*?\r?\n---\r?\n/, '').replace(/<!--[^]*?-->/g,'').replace(/^\s*# ([^\r\n]+)\r?\n/, (line,title) => title.trim()===heading ? '' : line).slice(0, 1800); }
@@ -93,7 +122,7 @@ class ConsoleView extends ItemView {
     this.registerEvent(this.plugin.app.workspace.on('codex-focus:finished', () => this.refresh().catch(console.error)));
     await this.refresh();
   }
-  async onClose() { this.closed = true; ++this.generation; this.plugin.views.delete(this); clearTimeout(this.searchTimer); clearTimeout(this.blurTimer); }
+  async onClose() { this.closed = true; ++this.generation; this.plugin.views.delete(this); for (const mount of this.widgetMounts || []) mount.destroy?.(); this.widgetMounts = []; this.widgetMount = null; clearTimeout(this.searchTimer); clearTimeout(this.blurTimer); }
   /**
    * 页头第二行：这一页自己的状态。
    *
@@ -157,12 +186,19 @@ class ConsoleView extends ItemView {
     const rail = el(app, 'aside', 'os-rail');
     const brand = el(rail, 'div', 'os-brand'); el(brand, 'span', 'os-mark', 'L');
     el(brand, 'div', 'os-wordmark', 'Learning OS');
+    // 左栏有两块交给挂件：这一块在品牌和导航之间，另一块在导航和底部按钮之间。
+    // 哪个挂件去哪一块由 codex-widgets 的设置决定，工作台只负责提供地方。
+    this.widgetTop = el(rail, 'div', 'os-widgets os-widgets-top');
     const nav = el(rail, 'nav', 'os-nav'); nav.setAttribute('aria-label', '工作台导航'); this.nav = new Map();
     // 五项，不再需要分组标题——十项才需要。
     for (const [id, label, icon] of NAV) {
       const b = btn(nav, '', () => this.setTab(id), 'os-nav-button'); b.title = label;
       const mark = el(b, 'span', 'os-icon'); setIcon?.(mark, icon); el(b, 'span', 'os-nav-label', label); this.nav.set(id,b);
     }
+    // 导航和底部按钮之间那段空白是布局逼出来的：nav 撑开、foot 贴底，中间永远空着。
+    // 6.4 把它交给 codex-widgets。插件没装就什么都不发生——这块 div 保持 hidden，
+    // 空白回到 6.3 的样子：工作台不因为少一个可选插件而少一块功能。
+    this.widgetHost = el(rail, 'div', 'os-widgets os-widgets-bottom');
     const foot = el(rail, 'div', 'os-rail-foot');
     btn(foot, '＋ 快速捕获', () => this.plugin.captureNote(), 'os-capture');
     btn(foot, '模块与版本', () => this.showModules(), 'os-quiet');
@@ -174,14 +210,42 @@ class ConsoleView extends ItemView {
     this.sectionEl = el(subhead, 'nav', 'os-sections'); this.sectionEl.setAttribute('aria-label', '页内分段');
     this.pageStatusEl = el(subhead, 'p', 'os-page-status');
     const actions = el(header, 'div', 'os-header-actions');
+    // 第三块挂件区。天气默认落这里：它一行就说完，塞进左栏得竖着摆成一张 85px 的卡。
+    // 放在 actions 里面而不是它旁边——actions 的 flex-basis 是 46%，按钮靠右端排，
+    // 挂件搁在外面就会被那 46% 的空盒子推到页头正中间，孤零零悬着。
+    this.widgetHeader = el(actions, 'div', 'os-widgets os-widgets-header');
     btn(actions, '今日日记', () => this.plugin.openDaily(), 'os-quiet');
     btn(actions, '＋ 新任务', () => this.plugin.captureTask(), 'os-primary');
     this.content = el(main, 'div', 'os-content');
+    // 三块 host 都建好之后再挂。放在建完左栏那块就挂，页头那块还不存在。
+    this.mountWidgets();
     const status = el(main, 'footer', 'os-footer'); this.statusEl = el(status, 'span');
     btn(status, '刷新', async() => {await this.flushEdits();return this.refresh(true);}, 'os-quiet');
     // 导航按键由 main.js 注册为 Obsidian 命令（默认 Alt+1–6，可改键）。
     // 这里不再自己监听 keydown，否则改键后旧的 Alt+N 仍会抢先生效。
     root.addEventListener('focusout', () => { clearTimeout(this.blurTimer); this.blurTimer=setTimeout(()=>{if(this.dirty&&!this.closed)this.refresh().catch(console.error);},0); });
+  }
+  /**
+   * 左栏挂件。codex-widgets 负责内容，工作台只负责给它一块地方和一个生命周期。
+   * 插件停用、或者根本没装，这里拿到 undefined，容器 hidden，左栏和 6.3 一样。
+   */
+  mountWidgets() {
+    for (const mount of this.widgetMounts || []) mount.destroy?.();
+    const widgets = this.owner('codex-widgets');
+    const mounts = [
+      [this.widgetTop, 'top'],
+      [this.widgetHost, 'bottom'],
+      [this.widgetHeader, 'header'],
+    ].map(([host, slot]) => {
+      const mount = widgets?.renderRail?.(host, {slot}) || null;
+      // 只判断「插件在不在」。空不空是渲染结果，会随设置变，而设置改动只走
+      // codex-widgets 自己的 repaint()，工作台不会被通知——所以那件事交给 CSS：
+      // 挂件区空的时候带 data-empty，样式表按它收起来。
+      host.hidden = !mount;
+      return mount;
+    }).filter(Boolean);
+    this.widgetMounts = mounts;
+    this.widgetMount = mounts[0] || null;
   }
   async flushEdits(){for(const editor of this.editors)await editor.flush();}
   /** 页内分段。只有一段的入口（今日）不显示这一行。 */
@@ -210,6 +274,9 @@ class ConsoleView extends ItemView {
     const request = ++this.generation;
     const scroll = [...this.content.querySelectorAll('[data-scroll]')].map(e => [e.dataset.scroll,e.scrollTop]);
     const p = this.plugin; p.bindOwners?.();
+    // 挂件插件可能在工作台开着的时候被启用或停用。只在「有没有」变了的时候重挂，
+    // 每次 refresh 都重建的话，设置弹窗里刚改的顺序会在下一次刷新时闪一下。
+    if (!!this.widgetMount !== !!this.owner('codex-widgets')) this.mountWidgets();
     const capture = this.owner('codex-capture');
     const [tasks, stats] = await Promise.all([capture?.listTasks?.({filter:this.filter,query:this.tab === 'tasks' ? this.query : ''}) || [], capture?.taskStats?.() || {open:0,done:0}]);
     const todayTasks = await capture?.listTasks?.({filter:'today'}) || [];
@@ -223,7 +290,10 @@ class ConsoleView extends ItemView {
     const parent = PARENT_OF.get(this.tab);
     for (const [id,b] of this.nav) { b.classList.toggle('is-active', id === parent); b.setAttribute('aria-current', id === parent ? 'page' : 'false'); }
     this.renderSections(parent);
-    this.content.className = `os-content os-page-${this.tab}`; this.content.replaceChildren();this.editors.clear();this.taskRows.clear();this.focusCard=null; this.timerEl = null;
+    // 今日页的数据刷新复用专注面板，避免拆掉正在播放的圆环与读数。
+    const keepFocus = this.tab === 'today' && this.focusPanel?.isConnected && this.focusPanelOwner === this.owner('codex-focus');
+    if (!keepFocus) { this.focusPanel = null; this.timerEl = null; }
+    this.content.className = `os-content os-page-${this.tab}`; this.content.replaceChildren();this.editors.clear();this.taskRows.clear();this.focusCard=null;
     this.statusEl.textContent = `${stats.open} 项待办 · ${this.snapshot.cards.filter(c => c.due <= Date.now()).length} 篇待复习`;
     if (!capture?.listTasks) this.statusEl.textContent = '行动索引未启用 · 在模块与版本中检查插件';
     switch (this.tab) {
@@ -273,15 +343,15 @@ class ConsoleView extends ItemView {
     const selected=p.focusPreview?.day===dayKey()?p.focusPreview.task?.id===task.id&&!!task.id||p.focusPreview.task===task:this.focusId===task.id&&!!task.id;
     record.row.dataset.focus=String(!!selected);
     const display=taskPresentation(task,{showProject:record.showProject});
-    if(record.heading)record.heading.textContent=display.title;
-    if(record.projectEl){record.projectEl.textContent=display.project;record.projectEl.hidden=!display.project;}
+    if(record.heading)setText(record.heading,display.title);
+    if(record.projectEl){setText(record.projectEl,display.project);record.projectEl.hidden=!display.project;}
     // 预算只在真有数据时出现：估过，或者已经花过时间。没估也没做过的任务
     // 不需要每行都被告知「未估算」。
     const shown=b.estimate>0||b.seconds>0;
     record.budgetEl.hidden=!shown&&!task.next_action;
     const spent=b.estimate>0?`已用 ${b.used.toFixed(1)} / ${b.estimate} 个番茄`:`已用 ${b.used.toFixed(1)} 个番茄`;
     const tail=b.state==='over'?` · 超出 ${b.overMinutes} 分钟`:b.state==='near'?' · 接近预计':'';
-    record.budgetEl.textContent=[task.next_action||'',shown?spent+tail:''].filter(Boolean).join(' · ');
+    setText(record.budgetEl,[task.next_action||'',shown?spent+tail:''].filter(Boolean).join(' · '));
   }
   renderFocusWidget(parent) {
     this.focusCard=el(parent,'div','os-focus-widget');this.focusHeading=el(this.focusCard,'strong');this.focusFeedback=el(this.focusCard,'p','os-muted');this.focusFeedback.setAttribute('role','status');
@@ -298,8 +368,8 @@ class ConsoleView extends ItemView {
     const preview=this.plugin.focusPreview?.day===dayKey()?this.plugin.focusPreview:null;
     const task=preview?.task||(this.snapshot.allTasks||[]).find(t=>t.id===this.focusId&&!!t.id);
     this.focusCard.dataset.focus=String(!!task);
-    this.focusHeading.textContent=task?`${task.deleted?'已删除：':task.done?'已完成：':''}${task.text}`:'选择一项今天最值得完成的行动';
-    this.focusFeedback.textContent=preview?.message||(task?'已记录到今日日记 · 选择后自动保存':this.focusId?'原今日要务无法定位，请重新选择':'在行动行点“设为今日要务”，或从下方选择');
+    setText(this.focusHeading,task?`${task.deleted?'已删除：':task.done?'已完成：':''}${task.text}`:'选择一项今天最值得完成的行动');
+    setText(this.focusFeedback,preview?.message||(task?'已记录到今日日记 · 选择后自动保存':this.focusId?'原今日要务无法定位，请重新选择':'在行动行点“设为今日要务”，或从下方选择'));
   }
   async chooseFocus(task){
     const p=this.plugin,request=(p.focusRequest||0)+1,selectedDay=dayKey();p.focusRequest=request;
@@ -391,7 +461,22 @@ class ConsoleView extends ItemView {
     const path = this.plugin.data.lastTextbook;
     if (path) {
       el(resume.body,'strong','os-book-title',title(path));
-      const record = this.plugin.study?.data?.records?.[path]; el(resume.body,'p','os-muted',record?.position?.page ? `上次停在第 ${record.position.page} 页` : '打开教材，接着上次的思路');
+      const record = this.plugin.study?.data?.records?.[path];
+      const page = record?.position?.page, total = Number(record?.totalPages) || 0;
+      el(resume.body,'p','os-muted',page ? `上次停在第 ${page} 页` : '打开教材，接着上次的思路');
+      // 进度条只在知道总页数时画。不知道就不画——用「已读页数 / 未知」凑一根条，
+      // 画出来的位置是假的，比不画更糟。totalPages 由 codex-study 在打开 PDF 时写入。
+      if (page && total > 0) {
+        const track = el(resume.body,'div','os-read-track');
+        const fill = el(track,'span','os-read-fill');
+        const portion = Math.max(0, Math.min(1, page / total));
+        fill.style.width = `${(portion * 100).toFixed(1)}%`;
+        track.setAttribute('role','progressbar');
+        track.setAttribute('aria-valuemin','0'); track.setAttribute('aria-valuemax',String(total));
+        track.setAttribute('aria-valuenow',String(page));
+        track.setAttribute('aria-label',`阅读进度：第 ${page} 页，共 ${total} 页`);
+        track.title = `${page} / ${total} 页 · ${Math.round(portion*100)}%`;
+      }
       btn(resume.body,'打开教材 ↗',()=>this.plugin.openLastTextbook(),'os-quiet');
     } else {el(resume.body,'p','os-muted','从课程或教材库开始，阅读位置会保存在这里。');btn(resume.body,'选择教材',()=>this.setTab('books'),'os-quiet');}
   }
@@ -432,24 +517,149 @@ class ConsoleView extends ItemView {
       start.disabled = !this.owner('codex-focus');
     }
   }
+  /**
+   * 专注台。
+   *
+   * 三档模式（专注 / 短休 / 长休）走的是两个 phase：短休和长休都是 break，
+   * 只是分钟数不同。timer-core 的 PHASES 是 ['focus','break']，加第三个要动
+   * 共享状态机和它的迁移，而这里要的只是「一键切到 15 分钟」——
+   * 界面上是三档，底下仍然是两态。
+   */
   renderFocus(parent) {
+    if (this.focusPanel) { parent.appendChild(this.focusPanel); return; }
     const p = this.plugin; const focus = this.panel(parent,'专注时间','','os-focus os-grow');
+    this.focusPanel = focus.panel;
+    this.focusPanelOwner = this.owner('codex-focus');
     if (!this.owner('codex-focus')) {this.empty(focus.body,'专注插件未启用','在 Obsidian 插件设置中启用 Codex 专注。');return;}
-    this.timerState = el(focus.tools,'span','os-status-pill');
-    this.timerEl = el(focus.body,'div','os-time'); this.timerEl.setAttribute('role','timer');
-    this.timerTask = el(focus.body,'p','os-focus-task');
+
+    // 凹陷的分段控件。选中项是一块浮在槽里的象牙玻璃。
+    const modes = el(focus.body,'div','os-modes'); modes.setAttribute('role','tablist');
+    this.modeButtons = new Map();
+    for (const [id,label,phase,minutes] of FOCUS_MODES) {
+      const b = btn(modes,label,async()=>{
+        if (p.data.timer.status !== 'idle') throw Error('计时进行中，先结束再切换模式');
+        if (p.data.timer.phase !== phase) await p.setPhase(phase);
+        await this.owner('codex-focus').setSettings({[phase==='focus'?'focusMinutes':'breakMinutes']:minutes});
+        this.mode = id; await this.refresh(true);
+      },'os-mode');
+      b.setAttribute('role','tab');
+      this.modeButtons.set(id,b);
+    }
+
+    // 读数和它外面那圈进度环。环画在 SVG 里：两条同心圆弧，底下一条是刻度轨，
+    // 上面一条按剩余比例收缩，末端跟着一颗小圆点。
+    const dial = el(focus.body,'div','os-dial');
+    dial.innerHTML = DIAL_SVG;
+    this.dialEl = dial;
+    this.dialPainted = false;
+    this.dialArc = dial.querySelector('[data-arc]');
+    this.dialBead = dial.querySelector('[data-bead]');
+    const face = el(dial,'div','os-dial-face');
+    this.timerEl = el(face,'div','os-time'); this.timerEl.setAttribute('role','timer');
+    this.timerDigits = [];
+    // 悬浮在读数上才浮出来的加减号：调时长不再需要底下单独一张卡。
+    const stepper = el(face,'div','os-time-step');
+    const cap = () => p.data.timer.phase === 'focus' ? 180 : 60;
+    const nudge = async (delta) => {
+      if (p.data.timer.status !== 'idle') throw Error('计时进行中，时长改不了');
+      const phase = p.data.timer.phase;
+      // 夹在范围内再提交，而不是超出时抛错：加减号是连点的东西。
+      const next = Math.min(cap(), Math.max(1, p.minutes() + delta));
+      await this.owner('codex-focus').setSettings({[phase==='focus'?'focusMinutes':'breakMinutes']:next});
+      this.mode = ''; this.tick(); this.paintModes();
+    };
+    btn(stepper,'−',()=>nudge(-5),'os-step').setAttribute('aria-label','减少 5 分钟');
+    btn(stepper,'+',()=>nudge(5),'os-step').setAttribute('aria-label','增加 5 分钟');
+
+    // 任务绑定。没绑时是「＋ 关联任务」，绑上之后显示任务名，点开还能换。
+    this.timerTask = btn(focus.body,'',()=>this.openFocusPicker(),'os-focus-bind');
+
+    // 目标轮次的小珠子。实心的是今天已完成的专注段，空心的是还没走到的。
+    this.beadsEl = el(focus.body,'div','os-beads'); this.beadsEl.setAttribute('role','img');
+
     const actions = el(focus.body,'div','os-focus-controls');
+    this.focusControls = actions;
     this.startButton = btn(actions,'开始专注',async()=>{await p.toggle(p.data.timer.task || '自由专注');this.tick();},'os-primary');
-    this.stopButton = btn(actions,'结束',async()=>{await p.stop();await this.refresh(true);},'os-quiet');
-    const settings = el(focus.body,'div','os-duration');
-    const minutes = input(settings,'时长（分钟）',p.minutes()); minutes.type='number'; minutes.min='1'; minutes.max=p.data.timer.phase==='focus'?'180':'60';
-    this.durationInput = minutes;
-    btn(settings,'设定分钟',async()=>{
-      const value = Number(minutes.value), phase = p.data.timer.phase;
-      if (!Number.isInteger(value)||value<1||value>(phase==='focus'?180:60)) throw Error('请输入范围内的整数分钟');
-      await this.owner('codex-focus').setSettings({[phase==='focus'?'focusMinutes':'breakMinutes']:value}); this.tick();
-    },'os-quiet');
-    this.phaseButton = btn(focus.tools,'休息',async()=>{await p.setPhase(p.data.timer.phase==='focus'?'break':'focus');await this.refresh(true);},'os-quiet');
+    this.stopButton = btn(actions,'结束',async()=>{await p.stop();await this.refresh(true);},'os-quiet os-stop');
+    this.phaseButton = this.startButton; // tick 里旧的引用还在用，指向一个不会报错的节点
+  }
+
+  /** 分段控件的选中态。手动调过分钟数之后三档都不亮——那时的时长不属于任何一档。 */
+  paintModes() {
+    if (!this.modeButtons) return;
+    const p = this.plugin, t = p.data.timer, minutes = p.minutes();
+    const hit = FOCUS_MODES.find(([,,phase,m]) => phase === t.phase && m === minutes);
+    for (const [id,,,] of FOCUS_MODES.map(m=>[m[0],m[1],m[2],m[3]])) {
+      const b = this.modeButtons.get(id);
+      const on = !!hit && hit[0] === id;
+      b.classList.toggle('is-active', on);
+      b.setAttribute('aria-selected', on ? 'true' : 'false');
+      b.disabled = t.status !== 'idle';
+    }
+  }
+
+  /**
+   * 进度环画的是**已过**，不是剩余。
+   *
+   * 第一版画的是剩余：整圈起步，随时间收缩。数字上没错，看着却是反的——
+   * 弧在缩、圆点贴着弧尾逆时针往回退，而人盯着倒计时时期待的是一根像表针那样
+   * 顺时针扫过去的东西。改成已过之后：起步空环、圆点在十二点，随时间顺时针长出来，
+   * 一段专注正好扫满一圈，圆点始终在进度的头上。
+   *
+   * 过渡只在 running 时开，时长正好等于一拍（1s，线性）：每秒到一个新值、
+   * 用整整一秒匀速走到位，接起来就是连续的。短于一拍会走走停停，
+   * 长于一拍会永远落在后面。
+   *
+   * 暂停和归零时必须关掉过渡——归零是 100% 跳回 0%，带着过渡的话
+   * 圆点会倒着绕一整圈，弧线也会反向缩回去。
+   */
+  paintDial() {
+    if (!this.dialArc) return;
+    const p = this.plugin, t = p.data.timer;
+    const total = Math.max(1, t.status === 'idle' ? p.minutes()*60 : (t.duration || p.minutes()*60));
+    const left = t.status === 'idle' ? total : Math.max(0, p.timerCore.remaining(t));
+    const done = 1 - Math.max(0, Math.min(1, left / total));   // 已过的比例
+    const live = t.status === 'running';
+    // 先决定过渡开不开，再写新值：顺序反了，这一拍的跳变会带着上一拍的过渡。
+    this.dialEl.classList.toggle('is-live', live && this.dialPainted);
+    this.dialArc.style.strokeDashoffset = String(DIAL_LEN * (1 - done));
+    // 组绕中心转，基准在 12 点。SVG 整体已经 -90°，这里不能再减一次——
+    // 减两次的结果是圆点比弧尾整整差 90°，看着像两个互不相干的东西。
+    this.dialBead.style.transform = `rotate(${done * 360}deg)`;
+    this.dialBead.style.opacity = t.status === 'idle' ? '0' : '1';
+    if (!this.dialPainted) {
+      // 新挂载的表盘先落在当前进度，下一拍才启用动画，避免从整圈倒放。
+      this.dialEl.getBoundingClientRect?.();
+      this.dialPainted = true;
+    }
+  }
+
+  /** 轮次珠子。今天完成了几段专注就点亮几颗，超过四段按四颗封顶。 */
+  /**
+   * 轮次珠子。建一次，之后只切 class。
+   *
+   * 原来每拍 replaceChildren 重建四个节点——一秒一次拆了重搭，屏幕上就是在闪。
+   * 一秒钟里这四颗珠子几乎永远不变，重建的是同样的东西。
+   */
+  paintBeads() {
+    if (!this.beadsEl) return;
+    const done = Math.min(FOCUS_TARGET, this.snapshot?.focus?.completedToday ?? 0);
+    if (this.beadsEl.childElementCount !== FOCUS_TARGET) {
+      this.beadsEl.replaceChildren();
+      for (let i = 0; i < FOCUS_TARGET; i++) el(this.beadsEl,'span','os-bead');
+    }
+    [...this.beadsEl.children].forEach((bead,i) => bead.classList.toggle('is-done', i < done));
+    this.beadsEl.setAttribute('aria-label', `今日目标 ${FOCUS_TARGET} 段，已完成 ${done} 段`);
+  }
+
+  /** 点任务绑定条：展开今日要务的选择器，没有就跳去行动页。 */
+  async openFocusPicker() {
+    if (this.tab !== 'today') { await this.setTab('today'); }
+    const picker = this.content.querySelector('.os-focus-picker');
+    if (!picker) return;
+    picker.open = true;
+    picker.scrollIntoView({block:'nearest'});
+    picker.querySelector('select')?.focus();
   }
   tick() {
     if(this.closed)return;
@@ -458,12 +668,35 @@ class ConsoleView extends ItemView {
     if(this.lastDay&&this.lastDay!==today)this.refresh().catch(console.error);
     this.lastDay=today;
     if (!this.timerEl || this.closed) return;
-    const p=this.plugin,t=p.data.timer; this.timerEl.textContent=clock(t.status==='idle'?p.minutes()*60:p.timerCore.remaining(t));
-    this.timerState.textContent=t.status==='running'?'进行中':t.status==='paused'?'已暂停':'准备好了';
-    this.timerTask.textContent=t.status==='idle'?((this.snapshot?.allTasks||[]).find(task=>task.id===this.focusId&&!task.done&&!task.deleted)?.text||'自由专注'):(t.task||'自由专注');
-    this.startButton.textContent=t.status==='running'?'暂停':t.status==='paused'?'继续':t.phase==='focus'?'开始专注':'开始休息';
-    this.stopButton.disabled=t.status==='idle';this.phaseButton.disabled=t.status!=='idle';this.phaseButton.textContent=t.phase==='focus'?'切到休息':'切到专注';
-    if (!this.owner('codex-focus')) {this.startButton.disabled=true;this.stopButton.disabled=true;this.phaseButton.disabled=true;this.timerState.textContent='插件未启用';}
+    const p=this.plugin,t=p.data.timer;
+    const reading = clock(t.status==='idle'?p.minutes()*60:p.timerCore.remaining(t));
+    this.timerEl.classList.toggle('is-long', reading.length > 5);
+    if (this.timerDigits.length !== reading.length) {
+      this.timerEl.replaceChildren();
+      this.timerDigits = [...reading].map(char => el(this.timerEl,'span',char === ':' ? 'os-time-colon' : 'os-time-digit',char));
+    } else {
+      [...reading].forEach((char, i) => setText(this.timerDigits[i], char));
+    }
+    this.paintDial(); this.paintBeads(); this.paintModes();
+
+    // 任务绑定条。没绑就是一句邀请，绑上了带一个圆点和下拉记号——
+    // 后者是在说「这里还能点」，前一版那行纯文字看不出可点。
+    const bound = t.status==='idle'
+      ? (this.snapshot?.allTasks||[]).find(task=>task.id===this.focusId&&!task.done&&!task.deleted)?.text
+      : (t.task && t.task!=='自由专注' ? t.task : '');
+    setText(this.timerTask, bound ? `● 正在进行：${bound} ▾` : '＋ 关联任务');
+    this.timerTask.classList.toggle('is-bound', !!bound);
+
+    // 形变 CTA：空闲时只有一个通栏的大漆按钮，跑起来才裂成 暂停 / 结束。
+    // 空闲时留一个按不动的「结束」，是在界面上摆一个永远没用的东西。
+    const running = t.status!=='idle';
+    setText(this.startButton,t.status==='running'?'⏸ 暂停':t.status==='paused'?'▶ 继续':t.phase==='focus'?'▶ 开始专注':'▶ 开始休息');
+    setText(this.stopButton,'⏹ 结束');
+    this.stopButton.hidden=!running;
+    // 直接拿着容器的引用，不从按钮往上摸 parentElement——
+    // 后者在无头 DOM 里是 undefined，而 smoke 就跑在那上面。
+    this.focusControls.classList.toggle('is-running',running);
+    if (!this.owner('codex-focus')) {this.startButton.disabled=true;this.stopButton.disabled=true;}
   }
   updateBooks() { if (!this.closed) this.refresh().catch(console.error); }
   renderProjects() {

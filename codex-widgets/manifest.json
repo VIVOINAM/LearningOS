@@ -1,0 +1,8 @@
+{
+  "id": "codex-widgets",
+  "name": "Codex 侧栏挂件",
+  "minAppVersion": "1.5.0",
+  "description": "工作台左栏的可配置挂件：时间、每日一言、倒计日、天气。天气之外全部离线。",
+  "author": "Codex",
+  "isDesktopOnly": false
+}

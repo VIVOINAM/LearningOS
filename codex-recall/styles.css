@@ -3,3 +3,13 @@
 .modal:has(.cr-review) .modal-content{box-sizing:border-box;min-width:0;}
 .cr-review h2,.cr-review p{margin:0;overflow-wrap:anywhere}.cr-answer{flex:1;min-height:120px;overflow:auto;overscroll-behavior:contain;line-height:1.7;padding:0 2px 8px;overflow-wrap:anywhere}
 .cr-ratings{display:flex;flex-wrap:wrap;gap:8px}.cr-ratings button{flex:1;min-height:36px}
+
+.modal:has(.cr-review){
+  background:var(--os-glass-strong);
+  -webkit-backdrop-filter:var(--os-glass-blur);backdrop-filter:var(--os-glass-blur);
+  border:1px solid var(--os-glass-shade);border-top-color:var(--os-glass-lit);border-left-color:var(--os-glass-lit);
+  box-shadow:var(--os-glass-inset),0 24px 64px rgba(32,24,18,.18);
+}
+.modal:has(.cr-review) .modal-content{background:transparent}
+.cr-review button{background:var(--os-glass-soft);border-color:var(--os-glass-shade);box-shadow:var(--os-glass-inset)}
+.cr-review button:hover:not(:disabled){background:var(--os-glass-hover)}

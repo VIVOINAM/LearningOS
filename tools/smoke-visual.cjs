@@ -1,6 +1,6 @@
 const fs=require('node:fs'),path=require('node:path'),assert=require('node:assert/strict');
 const {chromium}=require(process.env.PLAYWRIGHT_PATH||'C:/Users/longf/.cache/codex-runtimes/codex-primary-runtime/dependencies/node/node_modules/playwright');
-const root=path.resolve(__dirname,'..'),out=path.resolve(root,'../../workbench-checks/visual');fs.mkdirSync(out,{recursive:true});
+const root=path.resolve(__dirname,'..'),out=path.resolve(process.env.VISUAL_OUTPUT_DIR||path.resolve(root,'../../workbench-checks/visual'));fs.mkdirSync(out,{recursive:true});
 (async()=>{
  const browser=await chromium.launch({headless:true,channel:'msedge'});const page=await browser.newPage();const errors=[];
  page.on('pageerror',e=>errors.push(e.message));
@@ -17,6 +17,8 @@ const root=path.resolve(__dirname,'..'),out=path.resolve(root,'../../workbench-c
  await page.addScriptTag({content:`window.dueModule=(()=>{const module={exports:{}};const require=()=>({});${fs.readFileSync(path.join(root,'codex-workbench/due.js'),'utf8')};return module.exports;})();`});
  for(const [name,file]of [['budgetModule','budget.js'],['editorModule','action-editor.js']])await page.addScriptTag({content:`window.${name}=(()=>{const module={exports:{}};const require=n=>n.includes('shared/dom')?window.domModule:{};${fs.readFileSync(path.join(root,'codex-workbench',file),'utf8')};return module.exports;})();`});
  await page.addStyleTag({content:fs.readFileSync(path.join(root,'codex-capture/styles.css'),'utf8')});
+ await page.addStyleTag({content:fs.readFileSync(path.join(root,'codex-widgets/styles.css'),'utf8')});
+ await page.addScriptTag({content:`window.widgetCore=(()=>{const module={exports:{}};const require=n=>window.dateModule;${fs.readFileSync(path.join(root,'codex-widgets/core/widgets.js'),'utf8')};return module.exports;})();`});
  // 桩要还原 Obsidian 真实的 .modal > .modal-content > contentEl 结构，
  // 否则 styles.css 里 .modal:has(...) 的限高规则一条都不会命中，弹窗布局断言就等于在测桩。
  await page.addScriptTag({content:`window.FixtureModal=class {
@@ -24,7 +26,7 @@ const root=path.resolve(__dirname,'..'),out=path.resolve(root,'../../workbench-c
      this.containerEl=document.createElement('div');this.containerEl.className='modal-container';
      this.containerEl.style.cssText='position:fixed;inset:0;z-index:999;display:flex;align-items:center;justify-content:center';
      this.modalEl=document.createElement('div');this.modalEl.className='modal';
-     this.modalEl.style.cssText='background:#fff8ef;max-width:94vw';
+     this.modalEl.style.cssText='background:#fff8ef;max-width:94vw;max-height:80vh;overflow:hidden';
      this.wrapEl=document.createElement('div');this.wrapEl.className='modal-content';
      this.contentEl=document.createElement('div');
      this.wrapEl.append(this.contentEl);this.modalEl.append(this.wrapEl);this.containerEl.append(this.modalEl);
@@ -34,6 +36,12 @@ const root=path.resolve(__dirname,'..'),out=path.resolve(root,'../../workbench-c
  };`});
  await page.addScriptTag({content:`window.TaskModal=(()=>{const module={exports:{}};const require=n=>n==='obsidian'?{Modal:window.FixtureModal,Notice:class{}}:n.includes('shared/dom')?window.domModule:{day:()=>previewModel.dayKey()};${fs.readFileSync(path.join(root,'codex-capture/task-modal.js'),'utf8')};return module.exports.TaskModal;})();`});
  await page.addScriptTag({content:`window.detailModalModule=(()=>{const module={exports:{}};const require=n=>n==='obsidian'?{Modal:window.FixtureModal,Notice:class{constructor(t){window.lastNotice=t}}}:n.includes('shared/dom')?window.domModule:window.editorModule;${fs.readFileSync(path.join(root,'codex-workbench/detail-modal.js'),'utf8')};return module.exports;})();`});
+ // FixtureModal 必须先就位：WidgetSettings extends Modal，Modal 是 undefined 时
+ // 整个 IIFE 抛在 addScriptTag 里，而 addScriptTag 不会因此失败——window.CodexWidgets
+ // 只是静悄悄地不存在。
+ // 挂件走的是真正的 main.js，只把 Plugin 外壳和 requestUrl 换成桩：左栏要验的是
+ // 「挂件把那段空白填上之后，底部按钮还在不在视口里」，验一份抄写版等于没验。
+ await page.addScriptTag({content:`window.CodexWidgets=(()=>{const module={exports:{}};const require=n=>n==='obsidian'?{Plugin:class{async loadData(){return window.widgetData||null}async saveData(d){window.widgetData=d}addCommand(){}registerInterval(){}},Modal:window.FixtureModal,Notice:class{constructor(t){window.lastNotice=t}},requestUrl:async()=>({json:{current:{temperature_2m:17.4,weather_code:2}}}),setIcon(e,name){const svg=document.createElementNS("http://www.w3.org/2000/svg","svg");svg.setAttribute("data-icon",name);e.append(svg);}}:n.includes('shared/dom')?window.domModule:n.includes('shared/date')?window.dateModule:window.widgetCore;${fs.readFileSync(path.join(root,'codex-widgets/main.js'),'utf8')};return module.exports;})();`});
  await page.addScriptTag({content:`window.ConsoleView=(()=>{const module={exports:{}};const require=name=>name.includes('shared/dom')?window.domModule:name.includes('console-model')?window.previewModel:name.includes('due')?window.dueModule:name.includes('detail-modal')?window.detailModalModule:name.includes('action-editor')?window.editorModule:name.includes('budget')?window.budgetModule:{ItemView:class{constructor(){this.contentEl=document.querySelector('.view-content')}registerEvent(){}},Notice:class{constructor(t){window.lastNotice=t}},Modal:window.FixtureModal,setIcon(e,name){e.textContent=({sun:'☀','check-square':'✓','book-open':'▤',flame:'♨',files:'▱','rotate-ccw':'↶'})[name]||'○'}};${fs.readFileSync(path.join(root,'codex-workbench/console-view.js'),'utf8')};return module.exports.ConsoleView;})();`});
  const courses=JSON.parse(fs.readFileSync(path.join(root,'codex-workbench/main.js'),'utf8').match(/const COURSES = (\[.*\]);/)[1]);
  await page.evaluate(async courses=>{
@@ -43,7 +51,7 @@ const root=path.resolve(__dirname,'..'),out=path.resolve(root,'../../workbench-c
    const tasks=Array.from({length:85},(_,i)=>({id:'task-'+i,index:i,text:['完成第三章例题，整理偏导数的几何意义','复习伯努利方程的适用条件','整理材料科学课堂笔记','推导连续性方程并检查量纲'][i%4]+(i>3?' '+i:''),path:'02 项目/本周学习计划.md',raw:'- [ ] test '+i,priority:i===0?2:0,done:false,scheduled:i<8?day:'',due:i===1?'2026-09-01':''}));
    const timer={status:'idle',phase:'focus',remaining:1500,duration:1500,task:''};
    const sessions=[{phase:'focus',seconds:1800,endedAt:Date.now(),task:'整理数学分析笔记',completed:true}];
-   const records={'book/数学分析 II · 教材.pdf':{position:{page:42},annotations:[{kind:'question',note:'如何理解隐函数定理的局部性？',page:37}],daily:{[day]:1800},dailyPages:{[day]:[35,36,37,38,39,40,41,42]}}};
+   const records={'book/数学分析 II · 教材.pdf':{position:{page:42},totalPages:320,annotations:[{kind:'question',note:'如何理解隐函数定理的局部性？',page:37}],daily:{[day]:1800},dailyPages:{[day]:[35,36,37,38,39,40,41,42]}}};
    const focus={manifest:{version:'4.5.0'},settings:()=>({focusMinutes:p.data.focusMinutes,breakMinutes:p.data.breakMinutes}),setSettings:async patch=>Object.assign(p.data,patch)};
  const capture={index:{all:async()=>tasks},createProject:async name=>{const file={path:'02 项目/'+name+'.md',basename:name,extension:'md'};files.push(file);return file;},renameProject:async(file,name)=>{const old=file.path;file.path='02 项目/'+name+'.md';file.basename=name;window.projectRename={old,name:file.path};return file;},deleteProject:async file=>{window.projectDeleted=file.path;files.splice(files.indexOf(file),1);},readProject:async()=>({}),patchProject:async(file,before,patch)=>{window.projectPatch=patch;},patchTask:async(t,patch)=>{if(window.rejectPatch)throw Error('模拟写入失败');Object.assign(t,patch);if(patch.title)t.text=patch.title;return t;},addTask:async text=>{tasks.push({id:'new',text,raw:'- [ ] '+text,path:'00 工作台/今日任务.md',scheduled:day});},manifest:{version:'4.0.0'},listTasks:async({filter='open',query=''}={})=>tasks.filter(t=>(filter==='deleted'?t.deleted:!t.deleted&&(filter==='done'?t.done:!t.done))&&(filter!=='today'||t.scheduled===day||t.due)&&(filter!=='overdue'||t.due)&&(t.text+t.path).includes(query)),taskStats:async()=>({open:tasks.filter(t=>!t.done).length,done:tasks.filter(t=>t.done).length}),createNote:()=>{window.noteCreated=true;},updateNote:async(file,action)=>{window.noteAction=action;if(action==='delete')files.splice(files.indexOf(file),1);},deleteTask:async t=>{t.deleted=true;},updateTask:async(t,action)=>{if(action==='restore')t.deleted=false;if(action==='done')t.done=true;if(action==='reopen')t.done=false;if(action==='today')t.scheduled=day;if(action==='unschedule')t.scheduled='';}};
    const cards=[{path:files[0].path,due:Date.now()-1000,interval:1,reviews:2}];
@@ -58,6 +66,9 @@ const root=path.resolve(__dirname,'..'),out=path.resolve(root,'../../workbench-c
     courseCatalog:()=>courses,courseStateFor:c=>({next:c.id==='052475'?'第三章 · 完成全微分与复合函数求导练习':'整理本周课堂笔记，完成配套习题',exam:'2026-12-22'}),courseBooksFor:()=>[files.at(-1).path],courseStatsFor:()=>({minutes:50,questions:1}),startCourse:async()=>{},openCourse:async()=>{},configureCourse:()=>{},openTextbook:async f=>{window.openedPath=f.path;},openLastTextbook:async()=>{},
    };
    owners['codex-study']={engine:p.study,manifest:{version:'3.6.0'}};owners['codex-workbench']=p;
+   // 四个挂件全开，倒计日给两条：满配下左栏最挤，底部按钮最容易被顶出去。
+   window.widgetData={order:[{id:'clock',on:true,slot:'top'},{id:'quote',on:true,slot:'bottom'},{id:'countdown',on:true,slot:'bottom'},{id:'weather',on:true,slot:'header'}],clock:{hour12:true,seconds:true,date:true},countdown:{items:[{name:'期末考',date:'2027-01-05'},{name:'开题报告',date:'2026-12-01'}],max:3},weather:{lat:45.46,lon:9.19,place:'米兰',refreshMinutes:60}};
+   window.widgets=new CodexWidgets();await window.widgets.onload();owners['codex-widgets']=window.widgets;
    p.dailyAudit=async()=>({seconds:1500,switches:1,interruptions:1,projects:{'02 项目/数学学习.md':900,'独立任务 / 临时杂项':600},done:[],pending:tasks.slice(0,3),outputs:files.slice(0,2)});p.daily=async()=>({path:'05 日记/'+day+'.md'});p.saveDailyFeedback=async()=>{};p.setTomorrow=async()=>{};p.rolloverDaily=async()=>{};files.push({path:'02 项目/本周学习计划.md',basename:'本周学习计划',extension:'md',stat:{mtime:1}});capture.app=p.app;capture.captureTask=options=>new TaskModal(capture,options).open();capture.createTask=async value=>{if(window.failCreate)throw Error('模拟保存失败');window.createdTask=value;};p.captureTask=()=>capture.captureTask();window.v=new ConsoleView({},p);window.fixtureTasks=tasks;await v.onOpen();
  },courses);
  const results=[];
@@ -71,12 +82,70 @@ const root=path.resolve(__dirname,'..'),out=path.resolve(root,'../../workbench-c
     const rail=await page.evaluate(()=>{
       const nav=document.querySelector('.os-nav'),foot=document.querySelector('.os-rail-foot');
       const railEl=document.querySelector('.os-rail'),r=railEl.getBoundingClientRect(),f=foot.getBoundingClientRect();
-      return {navScrolls:nav.scrollHeight>nav.clientHeight+1,
+      const vis=e=>e&&!e.hidden&&getComputedStyle(e).display!=='none';
+      const top=document.querySelector('.os-widgets-top'),bottom=document.querySelector('.os-widgets-bottom');
+      const hosts=[top,bottom].filter(vis);
+      const shown=hosts.length>0;
+      const t=document.querySelector('.ow-clock-time');
+      const clockLines=t?Math.round(t.getBoundingClientRect().height/parseFloat(getComputedStyle(t).lineHeight)):0;
+      const clockClipped=!!t&&t.scrollWidth>t.clientWidth+1;
+      const navTop=nav.getBoundingClientRect().top;
+      return {widgets:shown?{
+                cards:hosts.reduce((n,h)=>n+h.querySelectorAll('.ow-card').length,0),
+                topCards:vis(top)?top.querySelectorAll('.ow-card').length:0,
+                overflowX:hosts.some(h=>h.scrollWidth>h.clientWidth+1),
+                clockLines,clockClipped,
+                clockAboveNav:!!t&&t.getBoundingClientRect().bottom<=navTop+1,
+                abovefoot:hosts.every(h=>h.getBoundingClientRect().bottom<=f.top+1)}:null,
+              navScrolls:nav.scrollHeight>nav.clientHeight+1,
               buttons:nav.querySelectorAll('.os-nav-button').length,
               headings:nav.querySelectorAll('.os-nav-heading').length,
               footInside:f.bottom<=r.bottom+1&&f.top>=r.top-1&&f.height>0};
     });
+   // 6.4：页头那一块挂件横排在标题和右上角按钮之间。它最容易出的问题不是自己长歪，
+   // 而是把「今日日记 / ＋新任务」挤出页头——所以量的是那两个按钮还在不在页头框内。
+   {
+    const head=await page.evaluate(()=>{
+      const h=document.querySelector('.os-widgets-header'),header=document.querySelector('.os-header');
+      const vis=e=>e&&!e.hidden&&getComputedStyle(e).display!=='none';
+      if(!vis(h))return null;
+      const b=header.getBoundingClientRect(),r=h.getBoundingClientRect();
+      const acts=[...document.querySelectorAll('.os-header-actions button')].map(e=>e.getBoundingClientRect());
+      const rows=new Set([...h.querySelectorAll('.ow-card')].map(c=>Math.round(c.getBoundingClientRect().top)));
+      return {cards:h.querySelectorAll('.ow-card').length,rows:rows.size,
+              icon:!!h.querySelector('.ow-inline-icon svg'),
+              inHeader:r.left>=b.left-1&&r.right<=b.right+1&&r.top>=b.top-1&&r.bottom<=b.bottom+1,
+              actionsInHeader:acts.every(a=>a.right<=b.right+1&&a.left>=b.left-1),
+              overlaps:acts.some(a=>a.left<r.right-1&&a.right>r.left+1)};
+    });
+    if(head){
+      assert.equal(head.cards,1,`页头应当只有天气一块：${JSON.stringify({width,height,head})}`);
+      assert.equal(head.rows,1,`页头挂件换行了：${JSON.stringify({width,height,head})}`);
+      assert.ok(head.icon,`页头天气没画出字形：${JSON.stringify({width,height})}`);
+      assert.ok(head.inHeader,`页头挂件超出页头范围：${JSON.stringify({width,height,head})}`);
+      assert.ok(head.actionsInHeader,`页头挂件把右上角按钮挤出了页头：${JSON.stringify({width,height,head})}`);
+      assert.ok(!head.overlaps,`页头挂件和右上角按钮重叠：${JSON.stringify({width,height,head})}`);
+    } else assert.ok(width<=800,`页头挂件不该在 ${width}x${height} 下消失`);
+   }
     assert.equal(rail.buttons,5,`导航项数异常：${rail.buttons}`);
+    // 6.4：挂件区接管了导航和底部按钮之间的空档。它 flex-basis 为 0 且自带滚动，
+    // 所以「挤不出底部按钮」这条不是自动成立的——宽松尺寸下四块全画得出，窄/矮时整块收起。
+    if(rail.widgets){
+      assert.ok(rail.widgets.cards>0,`挂件区显示着却一块都没画：${JSON.stringify({width,height})}`);
+      // 读数折行是 6.4 的原始 bug：「上午 7:55:50」在 196px 的左栏里放不下，
+      // 卡片从 62px 长到 99px，四个挂件一起把挂件区顶出一条滚动条。
+      // 折行和裁切要分开量：white-space:nowrap 之后读数不会再折，太长就变成悄悄被切掉，
+      // 高度一点不变。两条都在，才既守住 nowrap 这条规则，也守住「字符串别再变长」。
+      // 6.4 的位置契约：时间默认落在导航上方那一块。搬错槽位不会报错、也不会溢出，
+      // 只是安静地跑到导航底下去——只有拿它和导航的 y 坐标比一下才看得出来。
+      assert.ok(rail.widgets.clockAboveNav,`时间没有落在导航上方：${JSON.stringify({width,height})}`);
+      assert.equal(rail.widgets.topCards,1,`导航上方那块应当只有时间一块，实际 ${rail.widgets.topCards} 块`);
+      assert.ok(!rail.widgets.clockClipped,`时钟读数被裁掉了：${JSON.stringify({width,height})}`);
+      assert.equal(rail.widgets.clockLines,1,`时钟读数折成了 ${rail.widgets.clockLines} 行：${JSON.stringify({width,height})}`);
+      assert.ok(!rail.widgets.overflowX,`挂件横向溢出左栏：${JSON.stringify({width,height})}`);
+      assert.ok(rail.widgets.abovefoot,`挂件区压到了底部按钮上：${JSON.stringify({width,height})}`);
+      if(width>=1100&&height>=700)assert.equal(rail.widgets.cards,3,`宽松尺寸下左栏应有三块挂件（天气在页头）：${JSON.stringify({width,height})}`);
+    } else assert.ok(width<=800||height<=560,`挂件区不该在 ${width}x${height} 下消失`);
     assert.ok(rail.footInside,`侧栏底部按钮被挤出视口：${JSON.stringify({width,height})}`);
     if(height>=700&&width>=1100)assert.ok(!rail.navScrolls,`${width}x${height} 下导航区不应滚动`);
    }
@@ -134,7 +203,159 @@ const root=path.resolve(__dirname,'..'),out=path.resolve(root,'../../workbench-c
  await page.locator('.os-check').first().click();assert.equal(await page.evaluate(()=>fixtureTasks.filter(t=>t.done).length),1);
  await page.evaluate(()=>v.setTab('knowledge'));await page.locator('.os-note-row').first().click();assert.ok(await page.locator('.os-excerpt').textContent());
  await page.getByRole('button',{name:'加入复习',exact:true}).click();
- await page.evaluate(()=>v.setTab('today'));await page.getByRole('button',{name:'开始专注',exact:true}).click();assert.equal(await page.getByRole('button',{name:'暂停',exact:true}).count(),1);
+ // 6.6 的形变 CTA：空闲时只有开始键，跑起来才裂成 暂停 / 结束。
+ // 按名字找按钮在这里靠不住——今日要务卡里也有一个「开始专注」，
+ // 而站里那个现在带着 ▶。按结构找，再验两个状态各自该有什么。
+ await page.evaluate(()=>v.setTab('today'));
+ // 倒计时更新只改变化的数字；刷新今日页保留表盘，不重播起始动画。
+ {
+   const stable = await page.evaluate(async()=>{
+     const t=v.plugin.data.timer,keep={...t};
+     t.status='running';t.duration=1500;t.remaining=542;v.tick();
+     const dial=v.dialEl, digits=[...v.timerDigits];
+     const positions=()=>v.timerDigits.map(e=>e.getBoundingClientRect().x);
+     const before=positions();
+     t.remaining=541;v.tick();
+     const sameDigits=digits.every((e,i)=>e===v.timerDigits[i]);
+     const fixed=positions().every((x,i)=>Math.abs(x-before[i])<.1);
+     await v.refresh();
+     const sameDial=dial===v.dialEl&&dial.isConnected;
+     const reading=v.timerEl.textContent;
+     // 三位分钟数仍然完整显示。
+     t.remaining=10800;t.duration=10800;v.tick();
+     const longReading=v.timerEl.textContent;
+     Object.assign(t,keep);v.tick();
+     return {sameDigits,fixed,sameDial,reading,longReading};
+   });
+   assert.deepEqual(stable,{sameDigits:true,fixed:true,sameDial:true,reading:'09:01',longReading:'180:00'});
+ }
+ const cta=page.locator('.os-focus-controls .os-primary'),stop=page.locator('.os-focus-controls .os-stop');
+ // 验证数字的实际文本边界位于圆环内部，覆盖最小表盘与三位分钟数。
+ {
+   const overflow=await page.evaluate(()=>{
+     const t=v.plugin.data.timer,keep={...t},dial=v.dialEl,failures=[];
+     const width=dial.style.width;
+     for(const size of [116,150,200]){
+       dial.style.width=size+'px';
+       for(const seconds of [220,542,1500,5999,6000,10800]){
+         Object.assign(t,{status:'paused',duration:10800,remaining:seconds});v.tick();
+         const d=dial.getBoundingClientRect(),cx=d.x+d.width/2,cy=d.y+d.height/2;
+         const radius=d.width*.45;
+         for(const digit of v.timerDigits){
+           const range=document.createRange();range.selectNodeContents(digit);
+           const r=range.getBoundingClientRect();
+           for(const x of [r.left,r.right])for(const y of [r.top,r.bottom]){
+             if(Math.hypot(x-cx,y-cy)>radius)failures.push({size,reading:v.timerEl.textContent});
+           }
+         }
+       }
+     }
+     dial.style.width=width;Object.assign(t,keep);v.tick();
+     return failures;
+   });
+   assert.deepEqual(overflow,[],'倒计时文字必须完整落在圆环内并留出间距');
+ }
+ assert.equal(await stop.isVisible(),false,'空闲时不该摆一个按不动的「结束」');
+ // 等形变走完：flex-grow 有 340ms 过渡，80ms 时量到的是半路上的比例。
+ await cta.click();await page.waitForTimeout(480);
+ assert.match(await cta.textContent(),/暂停/,'跑起来开始键应变成暂停');
+ assert.equal(await stop.isVisible(),true,'跑起来才出现结束键');
+ {
+   // 65 / 35。两个按钮在同一个 flex 行里，比例不对时宽度立刻看得出来。
+   const w=await page.evaluate(()=>[document.querySelector('.os-focus-controls .os-primary').getBoundingClientRect().width,
+                                    document.querySelector('.os-focus-controls .os-stop').getBoundingClientRect().width]);
+   const share=w[0]/(w[0]+w[1]);
+   assert.ok(share>0.58&&share<0.72,`暂停键占比 ${(share*100).toFixed(0)}%，应在 65% 上下`);
+ }
+ {
+   // 进度环画的是已过：刚开始跑时几乎没有弧，而不是整整一圈。
+   const dial=await page.evaluate(()=>{const a=document.querySelector('[data-arc]');
+     return {len:Number(a.getAttribute('stroke-dasharray')),off:Number(getComputedStyle(a).strokeDashoffset.replace('px',''))};});
+   // 容差：computed style 把 dashoffset 取到三位小数，和 dasharray 的原值差在小数点后第四位。
+   assert.ok(dial.len>0&&dial.off>0&&dial.off<=dial.len+0.01,'刚起步时已过的弧应当接近于零：'+JSON.stringify(dial));
+
+   // 圆点必须落在弧的末端。这一条是量出来的，不是看出来的——
+   // 第一版把 -90° 加了两遍，圆点和弧尾差整整 90°，而上面那条断言照样通过：
+   // 弧长是对的，只有圆点在别处。两者都在屏幕坐标系里比，跨过 SVG 自己的 -90° 旋转。
+   //
+   // 先暂停再量：跑起来时圆点带着 1s 的线性过渡，随时都在去往下一个位置的路上。
+   await cta.click();await page.waitForTimeout(160);
+   const gap=await page.evaluate(()=>{
+     const arc=document.querySelector('[data-arc]'),bead=document.querySelector('.os-dial-bead');
+     const len=Number(arc.getAttribute('stroke-dasharray'));
+     const off=Number(getComputedStyle(arc).strokeDashoffset.replace('px',''));
+     const drawn=len-off;                       // 已画出的弧长
+     const p=arc.getPointAtLength(drawn);       // 弧尾在 SVG 用户坐标里的位置
+     const m=arc.getScreenCTM();                // 连同 -90° 旋转一起映射到屏幕
+     const tip={x:m.a*p.x+m.c*p.y+m.e, y:m.b*p.x+m.d*p.y+m.f};
+     const r=bead.getBoundingClientRect();
+     const dot={x:r.left+r.width/2, y:r.top+r.height/2};
+     return {dist:Math.hypot(tip.x-dot.x,tip.y-dot.y), r:r.width/2};
+   });
+   assert.ok(gap.dist<=Math.max(3,gap.r),`圆点离弧尾 ${gap.dist.toFixed(1)}px，应当落在弧的末端上`);
+
+   // 方向：圆点必须顺时针往前扫，不是逆时针往回退。
+   // 这一条上面那条几何断言抓不到——画「剩余」时圆点同样死死贴在弧尾上，
+   // 只是两个一起往回走。一张静止的截图也看不出来，只有隔着时间量两次才知道。
+   {
+     const dir=await page.evaluate(async()=>{
+       const wrap=document.querySelector('.os-dial-bead-wrap');
+       const ang=()=>{const m=new DOMMatrixReadOnly(getComputedStyle(wrap).transform);
+         return (Math.atan2(m.b,m.a)*180/Math.PI+360)%360;};
+       const t=v.plugin.data.timer,keep={...t};
+       // 夹具的 remaining 是个定值，自己不会走：手动往下拨两格，隔着过渡量两次。
+       t.status='running';t.duration=1500;t.remaining=1400;v.tick();
+       await new Promise(r=>setTimeout(r,1100));const a=ang();
+       t.remaining=1100;v.tick();
+       await new Promise(r=>setTimeout(r,1100));const b=ang();
+       Object.assign(t,keep);v.tick();
+       return {a:Number(a.toFixed(1)),b:Number(b.toFixed(1))};
+     });
+     assert.ok(dir.b>dir.a,`时间走了，圆点却从 ${dir.a}° 退到 ${dir.b}°——进度环画的该是已过，不是剩余`);
+   }
+   await cta.click();await page.waitForTimeout(160);   // 恢复运行，后面的断言接着用
+ }
+ {
+   // 三档模式：界面上三个，底下仍然是两个 phase。切到长休要真的把分钟数改掉，
+   // 而不是只让按钮亮起来——后者看起来一样，读数却纹丝不动。
+   await page.locator('.os-focus-controls .os-stop').click();await page.waitForTimeout(80);
+   assert.equal(await page.locator('.os-modes .os-mode').count(),3);
+   await page.getByRole('tab',{name:'长休 15m'}).click();await page.waitForTimeout(120);
+   assert.equal(await page.locator('.os-time').textContent(),'15:00','切到长休读数要跟着变');
+   assert.equal(await page.locator('.os-modes .os-mode.is-active').textContent(),'长休 15m');
+   await page.getByRole('tab',{name:'专注 25m'}).click();await page.waitForTimeout(120);
+   assert.equal(await page.locator('.os-time').textContent(),'25:00');
+   // 轮次珠子：四颗，今天完成过一段就该点亮一颗。
+   assert.equal(await page.locator('.os-bead').count(),4);
+   assert.ok(await page.locator('.os-bead.is-done').count()>=1,'夹具里今天有一段完成的专注，至少该亮一颗');
+   // 还没选过今日要务，绑定条应当是那句邀请。绑上之后什么样，在下面选完再验。
+   assert.equal(await page.locator('.os-focus-bind').textContent(),'＋ 关联任务');
+ }
+ {
+   // 空转的 tick 不许碰 DOM。
+   //
+   // tick 每秒跑一次，而里面大半的文字一秒都不会变。textContent 赋值即使内容一模一样
+   // 也会拆掉旧文本节点再建一个，于是按钮、任务标题、项目名每秒重绘一遍——
+   // 那个带渐变和阴影的大漆按钮尤其看得出来。这条断言把「没变就别写」钉死。
+   //
+   // 只看 childList 和 characterData：paintDial 每拍写 style 是应该的，那是它的工作。
+   const churn=await page.evaluate(()=>{
+     const t=v.plugin.data.timer,keep={...t};
+     t.status='idle';v.tick();          // 先跑一次让所有文字落到稳态
+     const root=document.querySelector('.os-focus');
+     // 直接读 takeRecords 的返回值，不依赖回调——回调是微任务，
+     // 而 page.evaluate 这一段是同步跑完的，回调根本轮不上。
+     // 第一版就栽在这儿：takeRecords() 清空队列却没人看，断言永远是 0。
+     const mo=new MutationObserver(()=>{});
+     mo.observe(root,{childList:true,characterData:true,subtree:true});
+     for(let i=0;i<3;i++)v.tick();
+     const recs=mo.takeRecords();
+     mo.disconnect();
+     Object.assign(t,keep);v.tick();
+     return {hits:recs.length, seen:recs.slice(0,4).map(m=>m.type+'@'+(m.target.className||m.target.parentElement?.className||m.target.nodeName))};
+   });
+   assert.equal(churn.hits,0,`状态没变的三次 tick 改动了 DOM ${churn.hits} 次：${churn.seen.join(', ')}`);
+ }
  await page.setViewportSize({width:420,height:720});await page.getByRole('button',{name:'专注与阅读',exact:true}).click();assert.equal(await page.locator('.os-today-right').isVisible(),true);assert.equal(await page.locator('.os-today-left').isVisible(),false);
  await page.setViewportSize({width:1100,height:720});await page.evaluate(()=>v.setTab('tasks'));
  await page.locator('.os-row-actions').first().getByRole('button',{name:'删除',exact:true}).click();
@@ -150,13 +371,15 @@ const root=path.resolve(__dirname,'..'),out=path.resolve(root,'../../workbench-c
  // 5.4：任务行动作平时收起、悬停或键盘聚焦时显现；且必须留在 Tab 顺序里。
  {
   const actions=firstRow.locator('.os-row-actions');
+  // 等浮现走完：6.6 把这条过渡从 120ms 拉到 220ms 并统一了缓动，
+  // 200ms 时量到的是 0.999——不是没显现，是还差最后一点。
   assert.equal(await actions.evaluate(e=>getComputedStyle(e).opacity),'0','动作应默认收起');
-  await firstRow.hover();await page.waitForTimeout(200);
+  await firstRow.hover();await page.waitForTimeout(400);
   assert.equal(await actions.evaluate(e=>getComputedStyle(e).opacity),'1','悬停后动作应显现');
   const reachable=await actions.evaluate(e=>[...e.querySelectorAll('button')].every(b=>b.offsetParent!==null&&getComputedStyle(b).visibility!=='hidden'));
   assert.ok(reachable,'动作按钮不得移出 Tab 顺序');
-  await page.mouse.move(0,0);await page.waitForTimeout(200);
-  await firstRow.locator('.os-row-actions button').first().focus();await page.waitForTimeout(200);
+  await page.mouse.move(0,0);await page.waitForTimeout(400);
+  await firstRow.locator('.os-row-actions button').first().focus();await page.waitForTimeout(400);
   assert.equal(await actions.evaluate(e=>getComputedStyle(e).opacity),'1','键盘聚焦时动作应显现');
  }
 await firstRow.getByRole('button',{name:'补充详情'}).click();
@@ -223,6 +446,16 @@ await firstRow.getByRole('button',{name:'补充详情'}).click();
  await page.evaluate(()=>v.refresh(true));await page.getByRole('button',{name:'编辑项目',exact:true}).last().click();assert.equal(await page.getByLabel('项目名称',{exact:true}).inputValue(),'内联测试项目');await page.getByLabel('项目名称',{exact:true}).fill('重命名测试项目');await page.getByLabel('项目名称',{exact:true}).press('Tab');await page.waitForTimeout(60);assert.equal(await page.evaluate(()=>window.projectRename.name),'02 项目/重命名测试项目.md');await page.getByRole('button',{name:'收起项目设置',exact:true}).click();await page.evaluate(()=>{for(const e of document.querySelectorAll('body>div'))if(e.style.position==='fixed')e.remove();});await page.evaluate(()=>v.refresh(true));page.once('dialog',dialog=>dialog.accept());await page.getByRole('button',{name:'删除项目',exact:true}).last().click();await page.waitForTimeout(60);assert.equal(await page.evaluate(()=>window.projectDeleted),'02 项目/重命名测试项目.md');
  await page.evaluate(()=>v.setTab('today'));
  assert.match(await page.locator('.os-focus-widget>strong').textContent(),/完成第三章/);
+ // 选了今日要务，专注台的绑定条要跟着显示它——两处说的是同一件事，不该各说各的。
+ assert.match(await page.locator('.os-focus-bind').textContent(),/正在进行：完成第三章/);
+ {
+   // 阅读进度条：只在知道总页数时出现，宽度按 页/总页 算。
+   const bar=await page.evaluate(()=>{const t=document.querySelector('.os-read-track');
+     return t?{有:true,占比:t.querySelector('.os-read-fill').style.width,标签:t.getAttribute('aria-label')}:{有:false};});
+   assert.equal(bar.有,true,'夹具的教材记录带 totalPages，应当画出进度条');
+   assert.equal(bar.占比,'13.1%','42 / 320');
+ }
+ assert.equal(await page.locator('.os-focus-bind').evaluate(e=>e.classList.contains('is-bound')),true);
  await page.screenshot({path:path.join(out,'focus-selected.png')});
  await page.evaluate(()=>v.setTab('tasks'));
  await page.getByPlaceholder('添加今日任务，Enter 设置番茄数').fill('今日快速任务');await page.getByRole('button',{name:'添加',exact:true}).click();
@@ -251,6 +484,88 @@ await firstRow.getByRole('button',{name:'补充详情'}).click();
  assert.ok(density.visible>=9,`同屏可见任务行 ${density.visible} 条，6.1 起不应少于 9（6.0 是 5 条）`);
  assert.ok(density.pitch>0&&density.pitch<=70,`行距 ${density.pitch}px，应不超过 70（6.0 是 117）`);
 
+ // 6.4 挂件设置弹窗。新弹窗最容易出的问题是字段横向溢出——
+ // 这里量的是每个输入框在不在弹窗可见框内，而不是弹窗自己 scrollWidth 有没有变，
+ // 后者会被 overflow-x:hidden 裁掉，量不出来。
+ await page.evaluate(()=>v.setTab('today'));
+ await page.getByRole('button',{name:'侧栏挂件设置',exact:true}).click();
+ await page.locator('.ow-settings').waitFor();
+ assert.equal(await page.locator('.ow-order-row').count(),4,'四个挂件都应出现在排序列表里');
+ {
+  await page.locator('.ow-section').filter({hasText:'背景'}).evaluate(d=>{d.open=true;});
+  const level=page.getByLabel('背景图可见度百分比',{exact:true});
+  assert.equal(await level.inputValue(),'14','新安装的背景图可见度默认应为 14%');
+  await level.fill('38');await level.press('Tab');await page.waitForTimeout(60);
+  const wallpaper=await page.evaluate(()=>({
+   visibility:widgetData.wallpaper.visibility,
+   scrim:document.documentElement.style.getPropertyValue('--os-scrim-opacity').trim(),
+   computed:getComputedStyle(document.querySelector('.os-root')).getPropertyValue('--os-scrim').trim(),
+  }));
+  assert.equal(wallpaper.visibility,38,'拖动百分比后应保存');
+  assert.equal(wallpaper.scrim,'0.62','38% 图片可见度应换算为 62% 遮罩');
+  assert.match(wallpaper.computed,/0\.62\)/,'工作台实际使用的遮罩必须读到调节值');
+ }
+ for(const size of [{width:1100,height:720},{width:420,height:720}]){
+  await page.setViewportSize(size);await page.waitForTimeout(60);
+  await page.evaluate(()=>{for(const d of document.querySelectorAll('.ow-section'))d.open=true;});
+  const fields=await page.locator('.ow-settings').evaluate(root=>{
+    const b=root.getBoundingClientRect();
+    return [...root.querySelectorAll('input,textarea,button')].map(e=>{const r=e.getBoundingClientRect();return {name:(e.getAttribute('aria-label')||e.textContent||'').trim().slice(0,12),left:r.left,right:r.right,wide:r.width>0,boxLeft:b.left,boxRight:b.right};});
+  });
+  for(const field of fields.filter(x=>x.wide))assert.ok(field.left>=field.boxLeft-1&&field.right<=field.boxRight+1,'挂件设置字段溢出弹窗：'+JSON.stringify({...size,field}));
+ }
+ await page.setViewportSize({width:1100,height:720});await page.waitForTimeout(60);
+ {
+  // 滚到底之后，「关闭」必须落在弹窗可见框内。这一条才是用户的诉求：够得着。
+  await page.evaluate(()=>{const p=document.querySelector('.ow-settings');p.scrollTop=p.scrollHeight;});
+  await page.waitForTimeout(60);
+  const reach=await page.evaluate(()=>{
+    const panel=document.querySelector('.ow-settings'),modal=panel.closest('.modal');
+    const m=modal.getBoundingClientRect(),p=panel.getBoundingClientRect();
+    const close=[...panel.querySelectorAll('.ow-actions button')].pop().getBoundingClientRect();
+    return {panelBelow:p.bottom-m.bottom,closeBelow:close.bottom-m.bottom,scrolls:panel.scrollHeight>panel.clientHeight+1};
+  });
+  assert.ok(reach.panelBelow<=1,`挂件设置面板伸出弹窗 ${Math.round(reach.panelBelow)}px，会被裁掉`);
+  assert.ok(reach.closeBelow<=1,`滚到底后「关闭」仍在弹窗外 ${Math.round(reach.closeBelow)}px，够不着`);
+ }
+ await page.screenshot({path:path.join(out,'widgets-settings.png')});
+ // 关掉一个挂件立刻落盘并重画左栏：设置弹窗没有「保存」按钮，这条是它的契约。
+ await page.getByLabel('显示天气挂件',{exact:true}).uncheck();await page.waitForTimeout(60);
+ assert.equal(await page.locator('.os-widgets .ow-card').count(),3,'取消勾选后左栏应少一块');
+ await page.getByLabel('显示天气挂件',{exact:true}).check();await page.waitForTimeout(60);
+ assert.equal(await page.locator('.os-widgets .ow-card').count(),4);
+ // 语录清空后恢复默认，而不是留下一块空卡片。
+ await page.getByLabel('语录，每行一句',{exact:true}).fill('');await page.getByLabel('语录，每行一句',{exact:true}).press('Tab');await page.waitForTimeout(60);
+ assert.ok((await page.locator('.ow-quote-text').textContent()).length>0,'清空语录后应回落到默认几句');
+ {
+  // 位置是三档轮换：导航上 -> 导航下 -> 页头 -> 回到导航上。每一档都要真的搬过去、立即落盘。
+  const place=page.getByLabel(/^时间：/);
+  const where=async()=>page.evaluate(()=>widgetData.order.find(e=>e.id==='clock').slot);
+  await place.click();await page.waitForTimeout(80);
+  assert.equal(await where(),'bottom','第一次点击应当换到导航下');
+  assert.equal(await page.locator('.os-widgets-top .ow-card').count(),0,'时间搬走后上面那块应当空掉');
+  assert.equal(await page.locator('.os-widgets-top').evaluate(e=>getComputedStyle(e).display),'none','上面那块空了要整块收起，不留一道缝');
+  await place.click();await page.waitForTimeout(80);
+  assert.equal(await where(),'header','第二次点击应当换到页头');
+  assert.equal(await page.locator('.os-widgets-header .ow-card').count(),2,'页头这时应当是天气加时间两块');
+  await place.click();await page.waitForTimeout(80);
+  assert.equal(await where(),'top','第三次点击应当轮回导航上');
+  assert.equal(await page.locator('.os-widgets-top .ow-card').count(),1,'轮回之后要搬得回来');
+ }
+ {
+   // 拿不到 Node 时的退化路径。夹具的 require 桩给不出真正的 fs，
+   // 正是移动端和任何非桌面环境的处境：壁纸默认开着，但必须安静地什么都不做——
+   // 不设 --os-wallpaper、不抛异常、背景退回那两道渐变。
+   const fallback=await page.evaluate(()=>({
+     设了壁纸:document.body.style.getPropertyValue("--os-wallpaper").trim(),
+     背景:getComputedStyle(document.querySelector(".os-root")).backgroundImage,
+   }));
+   assert.equal(fallback.设了壁纸,"","读不到聚焦目录时不该设壁纸变量");
+   assert.match(fallback.背景,/radial-gradient/,"背景要退回那两道渐变");
+   assert.ok(!fallback.背景.includes("url("),"退化之后背景里不该有图片层："+fallback.背景.slice(0,80));
+ }
+ await page.getByRole('button',{name:'关闭',exact:true}).click();
+ await page.locator('.ow-settings').waitFor({state:'detached'});
  assert.deepEqual(errors,[]);fs.writeFileSync(path.join(out,'layout-results.json'),JSON.stringify({results,errors,interactions:'search, complete, delete/restore, note CRUD controls, preview, recall, timer, mobile pane, weather, duplicate title'},null,2));
  console.log(`Passed ${results.length} layout checks and interactive flows. Screenshots: ${out}`);await browser.close();
 })().catch(e=>{console.error(e);process.exit(1);});

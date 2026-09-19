@@ -70,7 +70,11 @@ function themes(css) {
  * 但那是针对图标和控件边界；这里是同色系的分隔线，1.8 已经能看清）。
  */
 const RULES = [
-  { a: "--os-paper", b: "--os-bg", min: 1.25, kind: "surface", why: "卡片要能从页面底上浮起来" },
+  // 卡片要能被认出来。6.5 之前这条只认「面与面的明度差」，但那是手段不是要求：
+  // 白卡配一条看得清的描边，同样能从页面底上分出来，而且那是另一种正当的做法。
+  // 写成二选一之后，6.0 那次欠账仍然拦得住——它是面 1.11 **且** 线 1.43，两条都不够。
+  { any: [{ a: "--os-paper", b: "--os-bg", min: 1.25 }, { a: "--os-line", b: "--os-paper", min: 1.8 }],
+    kind: "surface", why: "卡片要能从页面底上分出来：靠明度差，或者靠描边，至少占一样" },
   { a: "--os-bg", b: "--os-soft", min: 1.12, kind: "surface", why: "次级面要和页面底分得开" },
   { a: "--os-line", b: "--os-paper", min: 1.8, kind: "border", why: "分区全靠这条线" },
   { a: "--os-ink", b: "--os-paper", min: 4.5, kind: "text", why: "正文" },
@@ -79,6 +83,10 @@ const RULES = [
   { a: "--os-muted", b: "--os-bg", min: 4.5, kind: "text", why: "次要文字在页面底上" },
   { a: "--os-accent", b: "--os-paper", min: 4.5, kind: "text", why: "强调色也当文字用" },
   { a: "--os-danger", b: "--os-paper", min: 4.5, kind: "text", why: "逾期提示" },
+  // 6.5 新增的第二强调色：它既当次级主按钮的底（上面压 --os-paper 的白字），
+  // 也当小标题的字色，两个用途量的是同一对关系。目前它和 --os-muted 同值，
+  // 但那是巧合不是约束——各自独立列一条，免得将来改动一个时另一个悄悄失守。
+  { a: "--os-accent-2", b: "--os-paper", min: 4.5, kind: "text", why: "次级强调色，当字也当按钮底" },
 ];
 
 /** 返回 [{theme, a, b, min, actual, ok, why}]，调用方决定怎么报。 */
@@ -87,6 +95,18 @@ function audit(css, rules = RULES) {
   const out = [];
   for (const [theme, tokens] of Object.entries(sets)) {
     for (const rule of rules) {
+      // any：一组候选关系，满足任意一条即可。报告里带上每一条的实测值，
+      // 否则失败时只知道「都不够」，不知道离哪一条最近。
+      if (rule.any) {
+        const parts = rule.any.map((one) => {
+          const x = tokens[one.a], y = tokens[one.b];
+          return { ...one, actual: x && y ? ratio(x, y) : null };
+        });
+        const ok = parts.some((p) => p.actual !== null && p.actual >= p.min - 0.005);
+        const best = parts.reduce((m, p) => (p.actual > (m?.actual ?? -1) ? p : m), null);
+        out.push({ theme, ...rule, a: best.a, b: best.b, min: best.min, actual: best.actual, parts, ok });
+        continue;
+      }
       const a = tokens[rule.a];
       const b = tokens[rule.b];
       if (!a || !b) {

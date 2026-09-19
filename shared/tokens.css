@@ -15,17 +15,103 @@
  */
 
 :root {
-  --os-bg: #e8e1d7;
-  --os-paper: #fffaf3;
-  --os-soft: #dcd4c6;
-  --os-line: #c6b9a8;
-  --os-ink: #3d3029;
-  --os-muted: #6a5749;
-  --os-accent: #a34b2d;
-  --os-accent-hover: #843a22;
-  --os-rail: #ded5c7;
-  --os-focus: #e8d7bf;
-  --os-danger: #a33324;
+  /* 6.5 换色：旧的暖纸底（页面底 #e8e1d7 / 卡片 #fffaf3）整体偏黄，
+     卡片和页面底都在奶油色里，谁也不比谁「上浮」。新方案把卡片提到纯白，
+     页面底压成古董奶油，让卡片真的跳出来。 */
+  /* 页面底：暖燕麦 / 羊皮纸白。上一版 #EDE4D0 的明度其实差不多，
+     闷的是饱和度——45% 的黄压在整页上。这里降到 33%，明度让回去。 */
+  --os-bg: #F8F6F1;
+  /* 白玻璃 0.68 叠在 #F8F6F1 上算出来的等效色。面板真正的底是 --os-glass，
+     但文字压着的是这个值，所以闸门量它。两者必须同步改，不然闸门量的是
+     一块界面上并不存在的颜色。 */
+  --os-paper: #FDFCFA;
+  /* 页面底提到 #F8F6F1 之后，次级面没有往更白走的余地了——它现在只承担
+     一件事：悬浮态那层「微弱暖灰底」。交互卡一律走 --os-paper 的纯白。 */
+  --os-soft: #EAE6DC;
+
+  /* 一条线管所有：卡片描边和内部分隔线合成一个值，收束线框的杂乱。
+     色相取自 #E6E2D8 那支暖灰，但压到 1.81——原值 1.29 撑不住分区，
+     而页面底提亮之后，卡片和底之间只剩这条线，它不能是隐形的。 */
+  --os-line: #C6BDA7;
+
+  /* 文字三级。6.6 之前只有 ink 和 muted 两级，正文和标题共用一个值——
+     玻璃面上层级全靠明度，两级不够用。 */
+  --os-ink: #2A2421;   /* 标题与主数字 */
+  --os-body: #453E3B;  /* 正文 */
+
+  /* 次要文字、小标题、完成状态标签，全部改成深鼠尾草绿。
+     旧值 #6a5749 是一种发浑的暖灰，它和正文只差明度、不差性质，
+     于是层级只能靠「更淡」表达，淡到一定程度就只剩浑浊。
+     换成一个不同色相的深绿，层级由色相承担，明度就可以留得很深——
+     它对白卡 9.73，比旧值还高，却明显不是正文。 */
+  /* 规格给的是 #7C756E，在次级面上是 3.64，低于 AA。保色相压暗到刚好过 4.5。 */
+  --os-muted: #6C6660;
+
+  /* 墨绿从「次要文字」退回本职：强调、选中态、进度。次要文字改用中性暖灰——
+     整页的小字全是绿的时候，绿就不再是强调色了。 */
+  --os-sage: #2E4A3B;
+
+  /* 同一个绿，另一个用途：次级动作按钮的底色。
+     写成第二个字面值而不是 var(--os-muted)，是为了 tools/contrast.js——
+     它只认字面十六进制，写成引用这条关系就从闸门里消失了，而消失不会报错。 */
+  --os-accent-2: #2E4A3B;
+
+  /* 赤陶红收窄到两处：专注卡里那一个「开始专注」，和左上角的 L。
+     一页里只有一个地方是红的，那个地方才叫重点。 */
+  --os-accent: #963D2E;
+  --os-accent-hover: #7A2E20;
+
+  /* 左栏降饱和：它是一块区域，不该比页面底还黄。 */
+  /* ---- 玻璃材质 ----
+     这几个值是 rgba，不进对比度闸门——闸门只认字面十六进制。
+     文字实际压在什么底上，由下面的 --os-paper 记录：那是玻璃叠在页面底上
+     算出来的等效色。闸门量的是它，而不是这层半透明本身。 */
+  --os-glass: rgba(255, 255, 255, 0.58);
+  --os-glass-strong: rgba(255, 255, 255, 0.72);
+  --os-glass-soft: rgba(255, 255, 255, 0.38);
+  --os-glass-field: rgba(255, 255, 255, 0.54);
+  --os-glass-hover: rgba(255, 255, 255, 0.74);
+  --os-glass-rail: rgba(255, 255, 255, 0.32);
+  /* 专注卡面积最大，需要比普通面板更强的明暗折射，否则会重新读成一块白卡。 */
+  --os-focus-glass:
+    linear-gradient(135deg, rgba(255,255,255,.62) 0%, rgba(255,255,255,.16) 48%, rgba(255,255,255,.38) 100%),
+    rgba(255,255,255,.20);
+  --os-focus-sheen:
+    radial-gradient(ellipse at 12% 0%, rgba(255,255,255,.70), transparent 42%),
+    radial-gradient(ellipse at 92% 100%, rgba(150,61,46,.10), transparent 45%);
+  --os-focus-blur: blur(28px) saturate(165%);
+  /* 壁纸让模糊重新有了可见的细节来源。统一由这一枚令牌控制，所有工作台面板、
+     学习侧栏和产品弹窗共享同一套折射强度。 */
+  --os-glass-blur: blur(20px) saturate(140%);
+  --os-glass-lit: rgba(255, 255, 255, 0.85);      /* 受光的上缘与左缘 */
+  --os-glass-shade: rgba(130, 115, 95, 0.12);     /* 背光的下缘与右缘 */
+  --os-glass-inset: inset 0 1px 1px rgba(255, 255, 255, 0.9);
+  --os-glass-drop: 0 12px 30px rgba(50, 40, 30, 0.05);
+  --os-glass-recess: rgba(0, 0, 0, 0.04);         /* 凹陷的分段控件槽 */
+  /* 壁纸上保留一层较轻的遮罩：让照片能被看清，同时继续托住正文。 */
+  --os-scrim: rgba(248, 246, 241, var(--os-scrim-opacity, 0.76));
+
+  /* 赤陶大漆：渐变加顶面高光，做出「一块有厚度的漆」而不是一块色。 */
+  --os-lacquer: linear-gradient(145deg, #963D2E, #7A2E20);
+  --os-lacquer-glow: inset 0 1px 0 rgba(255, 255, 255, 0.35), 0 6px 18px rgba(150, 61, 46, 0.28);
+
+  /* 缓动。所有悬浮、切换、进度都走这一条——不同曲线混用会让界面显得没校准过。 */
+  --os-ease: cubic-bezier(0.16, 1, 0.3, 1);
+
+  --os-rail: #F2EFE7;
+  /* 专注卡不再自带暖色底：所有卡片一律纯白，颜色让给它里面那个按钮。 */
+  --os-focus: #FFFFFF;
+  --os-danger: #963D2E;
+
+  /* 元数据药丸的三组淡底。前两组是「这条任务是什么」——项目、日期、优先级；
+     第三组是「它现在有问题」。细则里只提了墨绿和浅棕两组，红这组是我加的：
+     逾期是状态不是元数据，把它并进前两组，那条最该被看见的信息就消失了。 */
+  --os-pill-green-bg: #EAEEEB;   /* rgba(46,74,59,.10) 叠在页面底上 */
+  --os-pill-green-ink: #2E4A3B;
+  --os-pill-warm-bg: #F3EDE3;
+  --os-pill-warm-ink: #6B4A2F;
+  --os-pill-alert-bg: #F3E7E4;   /* rgba(150,61,46,.10) 叠在页面底上 */
+  --os-pill-alert-ink: #963D2E;
 
   /* 排版只留四级，加一个计时器专用展示号。
      5.4.0 之前散落 22 种字号，差 1px 的相邻值到处都是。 */
@@ -34,6 +120,12 @@
   --fs-body: 13px;
   --fs-meta: 11px;
   --fs-timer: 80px;
+
+  /* 展示用衬线。旧值是 Georgia——它是为屏幕可读性设计的低反差字，
+     笔画粗细几乎一致，放到 98px 就显得敦实。学术风的高反差衬线
+     （Bodoni / Didot 一路）粗细反差大，大字号下才有那股印刷味。
+     取不到就退回 Georgia，不至于掉到系统默认。 */
+  --os-serif: "Bodoni MT", "Didot", "Playfair Display", Georgia, "Times New Roman", serif;
 
   /* 标注色。同一个命名颜色在三个位置用三个值：PDF 上的高亮线要够深才看得见，
      卡片上的文字标签要更深才够对比度，调色按钮要更浅才不抢眼。
@@ -66,17 +158,50 @@
 }
 
 body.theme-dark {
-  --os-bg: #1e1814;
-  --os-paper: #342a21;
-  --os-soft: #453729;
-  --os-line: #6a5544;
-  --os-ink: #f4e6d5;
-  --os-muted: #c2aa91;
-  --os-accent: #e6a27d;
-  --os-accent-hover: #f2bd9e;
-  --os-rail: #241d17;
-  --os-focus: #413123;
-  --os-danger: #ffad91;
+  /* 深色跟着换：底色从暖棕转成中性偏绿的墨色，次要文字用浅鼠尾草绿——
+     和浅色那套是同一个判断的两个方向，不是两套独立配色。 */
+  --os-bg: #171A17;
+  --os-paper: #2A2E29;
+  --os-soft: #363D34;
+  --os-line: #5C6458;
+  --os-ink: #EDEAE1;
+  --os-body: #DAD5CC;
+  --os-muted: #AEA49A;
+  --os-sage: #A9BBA5;
+  --os-accent-2: #A9BBA5;
+
+  --os-glass: rgba(42, 48, 42, 0.58);
+  --os-glass-strong: rgba(42, 48, 42, 0.76);
+  --os-glass-soft: rgba(42, 48, 42, 0.40);
+  --os-glass-field: rgba(42, 48, 42, 0.64);
+  --os-glass-hover: rgba(58, 66, 57, 0.76);
+  --os-glass-rail: rgba(32, 37, 32, 0.42);
+  --os-focus-glass:
+    linear-gradient(135deg, rgba(255,255,255,.13) 0%, rgba(255,255,255,.025) 48%, rgba(255,255,255,.08) 100%),
+    rgba(25,30,25,.38);
+  --os-focus-sheen:
+    radial-gradient(ellipse at 12% 0%, rgba(255,255,255,.15), transparent 42%),
+    radial-gradient(ellipse at 92% 100%, rgba(224,140,99,.10), transparent 45%);
+  --os-glass-lit: rgba(255, 255, 255, 0.10);
+  --os-glass-shade: rgba(0, 0, 0, 0.35);
+  --os-glass-inset: inset 0 1px 1px rgba(255, 255, 255, 0.07);
+  --os-glass-drop: 0 12px 30px rgba(0, 0, 0, 0.28);
+  --os-glass-recess: rgba(0, 0, 0, 0.22);
+  --os-scrim: rgba(23, 26, 23, var(--os-scrim-opacity, 0.78));
+  --os-lacquer: linear-gradient(145deg, #B0523E, #8C3A2A);
+  --os-lacquer-glow: inset 0 1px 0 rgba(255, 255, 255, 0.18), 0 6px 18px rgba(0, 0, 0, 0.35);
+
+  --os-pill-green-bg: #26302A;
+  --os-pill-green-ink: #A9BBA5;
+  --os-pill-warm-bg: #322A22;
+  --os-pill-warm-ink: #D2B48C;
+  --os-pill-alert-bg: #3A2320;
+  --os-pill-alert-ink: #F09A82;
+  --os-accent: #E08C63;
+  --os-accent-hover: #F0A67F;
+  --os-rail: #121512;
+  --os-focus: #2A2E29;
+  --os-danger: #F09A82;
 
   --os-heat-0: #403328;
   --os-heat-1: #634536;

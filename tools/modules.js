@@ -19,6 +19,7 @@ const LABELS = {
   "codex-focus": "专注",
   "codex-study": "学习",
   "codex-recall": "复习",
+  "codex-widgets": "挂件",
   "codex-iteration": "版本迭代",
 };
 

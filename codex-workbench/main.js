@@ -319,7 +319,9 @@ class CodexWorkbench extends Plugin {
   }
   open(path) {return openReading(this.app,path);}
   async refresh() { await Promise.all([...this.views].map(v=>v.refresh())); }
-  tickViews() { this.bindOwners(); this.study?.settle(); if(this.readingToggle) { const t=this.data.timer; this.readingToggle.textContent=t.status==='running'?'暂停':t.status==='paused'?'继续':(this.readingFile()?'继续专注':(t.phase==='focus'?'开始专注':'开始休息')); this.readingStop.disabled=t.status==='idle'; } for (const v of this.views) v.tick(); const t=this.data.timer; this.status.textContent = t.status==='idle' ? '◈ 工作台' : `◷ ${t.phase==='focus'?'专注':'休息'} ${Math.ceil(this.timerCore.remaining(t)/60)} 分钟${t.status==='paused'?' · 暂停':''}`; }
+  tickViews() { this.bindOwners(); this.study?.settle(); if(this.readingToggle) { const t=this.data.timer; const rl=t.status==='running'?'暂停':t.status==='paused'?'继续':(this.readingFile()?'继续专注':(t.phase==='focus'?'开始专注':'开始休息')); if(this.readingToggle.textContent!==rl)this.readingToggle.textContent=rl; this.readingStop.disabled=t.status==='idle'; } for (const v of this.views) v.tick(); const t=this.data.timer; const label = t.status==='idle' ? '◈ 工作台' : `◷ ${t.phase==='focus'?'专注':'休息'} ${Math.ceil(this.timerCore.remaining(t)/60)} 分钟${t.status==='paused'?' · 暂停':''}`;
+    // 同理：这行字一分钟才变一次，却每秒被重写一遍。
+    if (this.status.textContent !== label) this.status.textContent = label; }
   minutes() { return this.data.timer.phase === 'focus' ? this.data.focusMinutes : this.data.breakMinutes; }
   setPhase(phase) { return this.focusOwner().dispatch('phase', {phase}); }
   focusOwner() {
