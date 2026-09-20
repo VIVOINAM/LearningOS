@@ -50,9 +50,18 @@
 .ow-count-days.is-near { color: var(--os-accent-2); font-weight: 650; }
 .ow-count-days.is-past { color: var(--os-muted); opacity: .75; }
 
-.ow-weather-temp {
-  font-family: Georgia, "Times New Roman", serif; font-variant-numeric: tabular-nums;
-  font-size: 23px; line-height: 1.15; color: var(--os-ink);
+/* 左栏竖版的天气：图标和温度并排，天气文字在底下。
+   和横排版共用同一幕，只是排布不同。字改用 --os-serif——原来这里写死了
+   Georgia，而设计系统里那三处数字（专注计时、左栏时钟、页头气温）本该
+   是同一种字的三个尺寸，这一处一直在外面。 */
+.ow-wx-row { display: flex; align-items: center; gap: 8px; min-width: 0; }
+.ow-wx-temp {
+  font-family: var(--os-serif); font-variant-numeric: tabular-nums;
+  font-size: 23px; line-height: 1.1; color: var(--os-ink);
+}
+.ow-wx-meta {
+  font-size: var(--fs-meta); color: var(--os-muted);
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0;
 }
 
 /* 齿轮。平时几乎看不见，鼠标进了左栏才浮出来——
@@ -73,24 +82,75 @@
 /* 页头那一行不是卡片：没有描边、没有底色，就是标题旁边的一行字。
    做成卡片会和右上角那两个按钮打架——一行里三个带框的东西，谁也不像主角。 */
 .os-widgets-header .ow-card {
-  flex-direction: row; align-items: baseline; gap: 7px;
+  flex-direction: row; align-items: center; gap: 9px;
   padding: 0; border: 0; background: transparent; border-radius: 0;
   white-space: nowrap; min-width: 0;
 }
-.ow-inline-icon { display: inline-flex; align-self: center; color: var(--os-muted); flex: none; }
-.ow-inline-icon svg { width: 17px; height: 17px; stroke-width: 1.6; }
-/* 读数用和左栏时钟、专注大钟同一套衬线——三个地方的数字是同一种东西。 */
-.ow-inline-temp {
-  font-family: var(--os-serif); font-variant-numeric: tabular-nums;
-  font-size: 19px; line-height: 1.1; color: var(--os-ink);
+/* 7.0：从「四样平铺、一样重」改成一个读数块。
+   温度当主，天气和地名退成它底下的一行小字；图标和温度取同一视觉重量。 */
+.ow-wx-read { display: flex; flex-direction: column; align-items: flex-start; gap: 1px; min-width: 0; }
+.os-widgets-header .ow-wx-temp { font-size: 25px; }
+.os-widgets-header .ow-wx-meta { letter-spacing: .02em; }
+
+/* ---------- 天气图标：自绘 + 动效 ---------- */
+
+/* 图形由 main.js 用 createElementNS 建（部署白名单只有三个文件，资源文件
+   到不了插件目录）。这里只管尺寸和动。
+
+   动画一律只动 transform 和 opacity——这两样走合成器，不引起重排重绘。
+   6.6.1 那一轮为了一个每秒都在动的进度环查了四个闪烁来源，最后关掉了
+   backdrop-filter；7.0 又把模糊打开了，所以这里更不能碰布局属性。 */
+
+.ow-art { flex: none; width: 26px; height: 28px; color: var(--os-body); overflow: visible; }
+.os-widgets-header .ow-art { width: 30px; height: 32px; }
+/* 退路：幕缺了就用 lucide 字形，再不行整段去掉只留温度。 */
+.ow-art-fallback { display: inline-flex; align-self: center; color: var(--os-muted); flex: none; }
+.ow-art-fallback svg { width: 18px; height: 18px; stroke-width: 1.6; }
+
+/* transform-box: fill-box 让 transform-origin 落在元素自己的盒子中心，
+   而不是 SVG 画布原点——不写这一条，「原地转」会变成绕左上角甩。 */
+.ow-art * { transform-box: fill-box; transform-origin: center; }
+
+.ow-art-rays { animation: ow-spin 24s linear infinite; }
+.ow-art-drift { animation: ow-drift 7s ease-in-out infinite; }
+.ow-art-drift.is-back { animation-duration: 11s; animation-direction: reverse; opacity: .55; }
+.ow-art-fall { animation: ow-fall 1.5s linear infinite; animation-delay: var(--ow-fall-delay, 0s); }
+.ow-art-haze { animation: ow-haze 4.2s ease-in-out infinite; animation-delay: var(--ow-fall-delay, 0s); }
+.ow-art-bolt { animation: ow-bolt 2.6s steps(1, end) infinite; }
+.ow-art-stone { animation-duration: 1.9s; }
+
+@keyframes ow-spin { to { transform: rotate(360deg); } }
+@keyframes ow-drift {
+  0%, 100% { transform: translateX(-.9px); }
+  50%      { transform: translateX(.9px); }
 }
-.ow-inline-text { font-size: var(--fs-meta); color: var(--os-muted); }
-/* 地名压到最轻：它最少变，也最不需要读。窄下来时第一个被切掉的也是它。 */
-.ow-inline-place {
-  font-size: var(--fs-meta); color: var(--os-muted); opacity: .8;
-  overflow: hidden; text-overflow: ellipsis; min-width: 0;
+@keyframes ow-fall {
+  0%       { transform: translateY(-2.4px); opacity: 0; }
+  28%      { opacity: 1; }
+  72%      { opacity: 1; }
+  100%     { transform: translateY(3.2px); opacity: 0; }
 }
-.ow-inline-place::before { content: "·"; margin-inline-end: 6px; opacity: .7; }
+@keyframes ow-haze {
+  0%, 100% { transform: translateX(-1.6px); opacity: .45; }
+  50%      { transform: translateX(1.6px); opacity: .9; }
+}
+@keyframes ow-bolt {
+  0%, 62%  { opacity: 1; }
+  66%      { opacity: .12; }
+  70%      { opacity: 1; }
+  74%      { opacity: .12; }
+  78%, 100% { opacity: 1; }
+}
+
+/* 静止不是「暂停」，是一个状态：读数没更新时图标就不该在动。
+   缓存过期、取数失败、没填坐标，三种情况都走这里——用动效表达一个
+   没更新的读数，就是用展示效果编数据。 */
+.ow-art[data-still] * { animation: none; }
+
+/* 系统说了不要动效就不动，不管数据新不新。 */
+@media (prefers-reduced-motion: reduce) {
+  .ow-art * { animation: none; }
+}
 
 /* ---------- 设置弹窗 ---------- */
 

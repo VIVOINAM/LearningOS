@@ -20,6 +20,122 @@ const MOUNT_TICK = 1000;
 // 取天气失败后的最短重试间隔。正常刷新走 weather.refreshMinutes，这个只管失败路径。
 const RETRY_AFTER = 60000;
 
+/* ---------- 天气图标：自绘 ---------- */
+
+/**
+ * 为什么是内联 SVG，不是图片文件：部署白名单只有 main.js、manifest.json、
+ * styles.css 三个（见架构与边界），资源文件根本到不了 .obsidian/plugins。
+ * 这条也定了复杂度上限——能画云飘、雨落、日轮转，画不了逐帧序列。
+ *
+ * 为什么用 createElementNS 而不是 innerHTML：省掉一处 HTML 注入面，
+ * 也让每个可动的部件能拿到 class，动画留在 styles.css 里。
+ *
+ * 动画只走 transform 和 opacity，一律不碰布局属性。6.6.1 那一轮查了四个
+ * 闪烁来源，最后关掉 backdrop-filter 才把界面稳住；7.0 又把模糊打开了
+ * （壁纸底下它重新有意义），所以这里引起一次重排的代价比 6.6 更高。
+ */
+const SVG_NS = "http://www.w3.org/2000/svg";
+
+function svg(parent, name, attrs) {
+  const node = document.createElementNS(SVG_NS, name);
+  for (const key in attrs) node.setAttribute(key, attrs[key]);
+  parent.appendChild(node);
+  return node;
+}
+
+// 描边式，和退路 lucide 是同一种画法——退不回去的时候两者不该长得判若两图。
+const CLOUD = "M7 17.6h9.6a3.6 3.6 0 0 0 .2-7.2 5.2 5.2 0 0 0-9.9-1.3A3.8 3.8 0 0 0 7 17.6Z";
+
+/** 八根光芒，绕中心排一圈。手写八条 line 只会写错其中一条。 */
+function sunRays(parent, cx, cy, inner, outer) {
+  const rays = svg(parent, "g", { class: "ow-art-rays" });
+  for (let i = 0; i < 8; i++) {
+    const a = (i * Math.PI) / 4;
+    svg(rays, "line", {
+      x1: (cx + Math.cos(a) * inner).toFixed(2), y1: (cy + Math.sin(a) * inner).toFixed(2),
+      x2: (cx + Math.cos(a) * outer).toFixed(2), y2: (cy + Math.sin(a) * outer).toFixed(2),
+    });
+  }
+  return rays;
+}
+
+/** 落下来的东西：雨滴、雪花、冰粒共用一套错开的下落节奏。 */
+function fallers(parent, xs, make) {
+  xs.forEach((x, i) => {
+    const g = svg(parent, "g", { class: "ow-art-fall", style: `--ow-fall-delay:${(i * 0.33).toFixed(2)}s` });
+    make(g, x, i);
+  });
+}
+
+/** 十幕，和 core.SCENES 一一对应。 */
+const SCENE_ART = {
+  sun(root) {
+    sunRays(root, 12, 12, 6.6, 9.2);
+    svg(root, "circle", { cx: 12, cy: 12, r: 4.2 });
+  },
+  "sun-cloud"(root) {
+    // 太阳往左上退、云往右下压，两者只在一角相交。第一版两个同心摆，
+    // 光芒直接穿过云身，看着像一团乱线。
+    sunRays(root, 8, 7, 4.2, 6);
+    svg(root, "circle", { cx: 8, cy: 7, r: 2.6 });
+    const front = svg(root, "g", { transform: "translate(3.2 3.4) scale(.84)" });
+    svg(front, "path", { d: CLOUD, class: "ow-art-drift" });
+  },
+  cloud(root) {
+    svg(root, "path", { d: CLOUD, class: "ow-art-drift" });
+  },
+  overcast(root) {
+    // 摆位放在外层 g 上，动画放在里层 path 上：CSS 的 transform 会整个盖掉
+    // transform 这个呈现属性，写在同一个节点上就等于把摆位弄丢。
+    const back = svg(root, "g", { transform: "translate(-4.6 -4.4) scale(.70)" });
+    svg(back, "path", { d: CLOUD, class: "ow-art-drift is-back" });
+    svg(root, "path", { d: CLOUD, class: "ow-art-drift" });
+  },
+  fog(root) {
+    // 云整体上提，给下面三条雾线让出位置。第一版间距 2.1 而描边就有 1.6，
+    // 三条粘成一块实心，整个图标读成一个罐子。
+    const top = svg(root, "g", { transform: "translate(0 -4)" });
+    svg(top, "path", { d: CLOUD });
+    [0, 1, 2].forEach((i) => {
+      const inset = i * 1.4;
+      svg(root, "line", {
+        x1: (5.6 + inset).toFixed(2), y1: 18.8 + i * 2.9,
+        x2: (18.4 - inset).toFixed(2), y2: 18.8 + i * 2.9,
+        class: "ow-art-haze", style: `--ow-fall-delay:${(i * 0.5).toFixed(2)}s`,
+      });
+    });
+  },
+  drizzle(root) {
+    svg(root, "path", { d: CLOUD });
+    fallers(root, [10, 14.4], (g, x) => svg(g, "line", { x1: x, y1: 19.4, x2: x - 0.5, y2: 21.2 }));
+  },
+  rain(root) {
+    svg(root, "path", { d: CLOUD });
+    fallers(root, [8.6, 12, 15.4], (g, x) => svg(g, "line", { x1: x, y1: 19.2, x2: x - 0.8, y2: 22 }));
+  },
+  snow(root) {
+    svg(root, "path", { d: CLOUD });
+    // 实心点，不是六角星。26px 上画星形，三个的横臂会连成一条杠——
+    // 分辨率不够的时候，形状要靠轮廓区分，不靠内部细节。
+    // 和雨的区别因此是「圆点 vs 斜线」，那个在任何尺寸下都分得开。
+    fallers(root, [8.6, 12, 15.4], (g, x, i) => {
+      svg(g, "circle", { cx: x, cy: 20.4 + (i === 1 ? 1.4 : 0), r: 1.05, fill: "currentColor", stroke: "none" });
+    });
+  },
+  thunder(root) {
+    svg(root, "path", { d: CLOUD });
+    svg(root, "path", { d: "M12.8 18.6 10.6 21.8h2.6l-1.4 2.6", class: "ow-art-bolt" });
+  },
+  hail(root) {
+    svg(root, "path", { d: CLOUD });
+    // 两侧斜雨、正中一颗冰粒，三者不许在横向上叠。第一版雨滴在 9 / 15、
+    // 冰粒在 12 且高度相同，三个糊成一坨。
+    fallers(root, [8.2, 16], (g, x) => svg(g, "line", { x1: x, y1: 19.2, x2: x - 0.7, y2: 21.3 }));
+    fallers(root, [12], (g, x) =>
+      svg(g, "circle", { cx: x, cy: 22.2, r: 1.15, fill: "currentColor", stroke: "none", class: "ow-art-stone" }));
+  },
+};
+
 // Windows 桌面聚焦的图片缓存。锁屏那套在 ContentDeliveryManager 下，
 // 但它只在开了锁屏聚焦时才有东西；桌面这一路更靠谱，而且文件带 .jpg 扩展名。
 const SPOTLIGHT_DIR = "AppData/Local/Packages/MicrosoftWindows.Client.CBS_cw5n1h2txyewy/LocalCache/Microsoft/IrisService";
@@ -41,6 +157,9 @@ class CodexWidgets extends Plugin {
     // 一个计时器喂所有挂载点。此前的写法是每个 renderRail 自己 setInterval，
     // 工作台反复 refresh 之后会留下一串还在跑的旧计时器。
     this.registerInterval(window.setInterval(() => this.tick(), MOUNT_TICK));
+    // 窗口不在前台时让天气图标停下来。不挂在每秒那一拍上：可见性一天变不了
+    // 几次，而 tick 喂着所有挂载点，往里加活最贵。
+    this.registerDomEvent(document, "visibilitychange", () => this.repaint());
     this.apiVersion = 1;
     if (this.weatherWanted()) this.fetchWeather().catch((e) => console.error("天气获取失败", e));
     this.applyWallpaperVisibility();
@@ -81,7 +200,9 @@ class CodexWidgets extends Plugin {
     if (!this.data.wallpaper.on) { this.clearWallpaper(); return; }
     try {
       const today = day();
-      const picked = core.pickWallpaper(this.scanWallpapers(), today);
+      // 偏移来自「换一张」，只在当天有效——跨日由 core.wallpaperShift 归零，
+      // 这里不写回数据，免得一个只读的渲染路径顺手改了设置。
+      const picked = core.pickWallpaper(this.scanWallpapers(), today, core.wallpaperShift(this.data.wallpaper, today));
       if (!picked) { this.clearWallpaper(); return; }
       if (this.wallpaperPath === picked) return;   // 同一张，别重新读一遍几 MB
       const bytes = require("fs").readFileSync(picked);   // 只有选中那一张才整张读
@@ -92,6 +213,9 @@ class CodexWidgets extends Plugin {
       this.wallpaperDay = today;
       // 挂在 body 上，靠继承传下去：挂件插件不该知道 .os-root 长什么样。
       document.body.style.setProperty("--os-wallpaper", `url("${url}")`);
+      // 第二个声明，和 --os-wallpaper 同进同出：告诉样式表「背后现在是一张照片」。
+      // 玻璃的亮度钳位挂在这个类上——没有照片时钳位反而会把暖燕麦底压成灰。
+      document.body.classList.add("os-wallpaper-on");
     } catch (error) {
       console.error("聚焦壁纸未启用：", error.message);
       this.clearWallpaper();
@@ -103,6 +227,7 @@ class CodexWidgets extends Plugin {
     this.wallpaperUrl = "";
     this.wallpaperPath = "";
     document.body.style.removeProperty("--os-wallpaper");
+    document.body.classList.remove("os-wallpaper-on");
   }
 
   /** 走一遍聚焦缓存，挑出横版。只读文件头判尺寸，两百多个文件约 110ms。 */
@@ -172,7 +297,7 @@ class CodexWidgets extends Plugin {
       if (clock) clock.textContent = core.clockText(now, this.data.clock);
       const date = mount.host.querySelector("[data-ow-date]");
       // 也要重写时段：跨正午那一秒如果只更新读数，「上午」会一直挂到下次整棵树重画。
-      if (date) date.textContent = [core.meridiem(now, this.data.clock), this.data.clock.date ? core.dateText(now) : ""].filter(Boolean).join(" · ");
+      if (date) date.textContent = this.data.clock.date ? core.dateText(now) : "";
     }
     // 跨日换一张壁纸。判断的是日期字符串，不是「跑了多少秒」——
     // 后者在休眠唤醒之后会错过换日那一刻。
@@ -209,16 +334,62 @@ class CodexWidgets extends Plugin {
     gear.setAttribute("aria-label", "侧栏挂件设置");
   }
 
-  /** 天气的横排版：字形 + 读数 + 天气 + 地名，全在一行。 */
+  /**
+   * 图标现在该不该动。三个条件都在 core.weatherAnimated 里，这里只负责取值。
+   *
+   * stale 包含「取数失败」：weatherError 非空时读数一定是旧的那份缓存。
+   */
+  weatherMoves() {
+    const w = this.data.weather;
+    const stale = !!this.weatherError || core.weatherStale(w.cache, w.refreshMinutes);
+    const reduced = !!window.matchMedia?.("(prefers-reduced-motion: reduce)")?.matches;
+    return core.weatherAnimated({ stale, reduced, hidden: !!document.hidden });
+  }
+
+  /**
+   * 画一个天气图标。
+   *
+   * 画不出来（幕缺了）就退回 lucide 字形，再不行整段去掉只留温度——
+   * 自绘之前那条退路是 setIcon 自带的，自绘之后得自己留着。
+   */
+  weatherArt(parent, code, animated) {
+    const scene = core.weatherScene(code);
+    const draw = SCENE_ART[scene];
+    if (!draw) {
+      const mark = el(parent, "span", "ow-art-fallback");
+      setIcon?.(mark, core.weatherIcon(code));
+      if (!mark.childElementCount) mark.remove();
+      return null;
+    }
+    const node = svg(parent, "svg", {
+      class: `ow-art ow-art-is-${scene}`, viewBox: "0 0 24 26",
+      fill: "none", stroke: "currentColor", "stroke-width": "1.6",
+      "stroke-linecap": "round", "stroke-linejoin": "round",
+      "aria-hidden": "true", focusable: "false",
+    });
+    draw(node);
+    // 静止不是「暂停动画」，是一个状态：读数没更新时它就不该在动。
+    if (!animated) node.setAttribute("data-still", "");
+    return node;
+  }
+
+  /**
+   * 天气的横排版。7.0 之前是「字形 + 温度 + 天气 + 地名」四样平铺在一行，
+   * 每样一样重；现在是一个读数块：温度当主（走 --os-serif，和专注计时、
+   * 左栏时钟同一种字的三个尺寸），天气和地名退成它底下的一行小字。
+   *
+   * 能这么做是因为页头那条托底带先落了。在那之前这块文字直接压在照片上，
+   * 实测 6.72 而且是撞上的——那时候把它放大，只会得到一个更大的、
+   * 更看不清的气温。
+   */
   inline_weather(card) {
     const cache = this.data.weather.cache;
     if (!cache) { el(card, "span", "ow-muted", this.weatherError || "获取中…"); return; }
-    const mark = el(card, "span", "ow-inline-icon");
-    setIcon?.(mark, core.weatherIcon(cache.code));
-    if (!mark.childElementCount) mark.remove();
-    el(card, "span", "ow-inline-temp", `${cache.temp}°`);
-    el(card, "span", "ow-inline-text", core.weatherText(cache.code));
-    if (this.data.weather.place) el(card, "span", "ow-inline-place", this.data.weather.place);
+    this.weatherArt(card, cache.code, this.weatherMoves());
+    const read = el(card, "span", "ow-wx-read");
+    el(read, "span", "ow-wx-temp", `${cache.temp}°`);
+    const meta = [core.weatherText(cache.code), this.data.weather.place].filter(Boolean);
+    el(read, "span", "ow-wx-meta", meta.join(" · "));
   }
 
   /**
@@ -229,7 +400,7 @@ class CodexWidgets extends Plugin {
   paint_clock(card) {
     const now = new Date();
     el(card, "div", "ow-clock-time", core.clockText(now, this.data.clock)).setAttribute("data-ow-clock", "");
-    const meta = [core.meridiem(now, this.data.clock), this.data.clock.date ? core.dateText(now) : ""].filter(Boolean);
+    const meta = [this.data.clock.date ? core.dateText(now) : ""].filter(Boolean);
     if (meta.length) el(card, "div", "ow-clock-date", meta.join(" · ")).setAttribute("data-ow-date", "");
   }
 
@@ -248,12 +419,15 @@ class CodexWidgets extends Plugin {
     }
   }
 
+  /** 左栏竖版。和横排版共用同一幕，只是排布不同——两处不该长成两种天气。 */
   paint_weather(card) {
     el(card, "p", "ow-title", this.data.weather.place || "天气");
     const cache = this.data.weather.cache;
     if (!cache) { el(card, "p", "ow-muted", this.weatherError || "获取中…"); return; }
-    el(card, "div", "ow-weather-temp", `${cache.temp}°`);
-    el(card, "div", "ow-muted", core.weatherText(cache.code));
+    const row = el(card, "div", "ow-wx-row");
+    this.weatherArt(row, cache.code, this.weatherMoves());
+    el(row, "div", "ow-wx-temp", `${cache.temp}°`);
+    el(card, "div", "ow-wx-meta", core.weatherText(cache.code));
   }
 
   /* ---------- 天气 ---------- */
@@ -380,7 +554,6 @@ class WidgetSettings extends Modal {
     };
     toggle("显示日期那一行", "date");
     toggle("显示秒", "seconds");
-    toggle("十二小时制", "hour12");
   }
 
   renderQuote(host) {
@@ -481,11 +654,20 @@ class WidgetSettings extends Modal {
     };
     visibility.oninput = preview;
     visibility.onchange = () => { preview(); this.commit("背景可见度已保存"); };
-    btn(host, "换一张", () => {
-      // 手动换：清掉今天那张的记忆，下一次挑会重新走一遍
-      this.p.wallpaperPath = "";
+    btn(host, "换一张", async () => {
+      // 往后拨一格。此前这里只是把 wallpaperPath 清空再调一次 applyWallpaper，
+      // 而挑图是 (列表, 日期) 的纯函数——同一天怎么算都是同一张。
+      // 于是它重读了几 MB 的同一个文件、重建了一个 blob URL，界面一点没变，
+      // 还弹「已换一张」：唯一真正生效的是那句谎话。
+      const wallpaper = this.p.data.wallpaper;
+      if (!wallpaper.on) { new Notice("背景没有开着"); return; }
+      const before = this.p.wallpaperPath;
+      wallpaper.shiftDay = day();
+      wallpaper.shift = (Math.trunc(Number(wallpaper.shift)) || 0) + 1;
       this.p.applyWallpaper();
-      new Notice(this.p.wallpaperPath ? "已换一张" : "没找到可用的聚焦图片");
+      if (!this.p.wallpaperPath) { new Notice("没找到可用的聚焦图片"); return; }
+      if (this.p.wallpaperPath === before) { new Notice("聚焦缓存里只有这一张横版图"); return; }
+      await this.commit("已换一张");
     }, "ow-quiet");
   }
 

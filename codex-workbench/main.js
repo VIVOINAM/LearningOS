@@ -7,6 +7,7 @@ const {el, btn: domBtn} = require('../shared/dom');
 const {ReadingFlow} = require('./reading-flow');
 const {EstimateModal} = require('./estimate-modal');
 const {estimateSuggestion, hasWorked} = require('./console-model');
+const {insertQuickNote} = require('./scratchpad-model');
 const { ConsoleView, NAV: NAV_TABS, LEAF_LABELS, LEAVES } = require("./console-view.js");
 // A bundled fallback keeps the workbench compatible when the standalone timer plugin is disabled.
 const T = require("../shared/disabled-timer.js");
@@ -104,6 +105,7 @@ class CodexWorkbench extends Plugin {
         breakMinutes: 5,
         priorities: {},
         consoleReviewPane: 'daily',
+        quickNotesDraft: '',
         sessions: [],
       },
       await this.loadData()
@@ -365,6 +367,14 @@ class CodexWorkbench extends Plugin {
   ensure(path, text) { return ensureFile(this.app, path, text); }
   daily(time=Date.now()) { return this.ensure(`05 日记/${day(time)}.md`, `---\ntype: daily\ndate: ${day(time)}\n---\n# ${day(time)}\n\n<div class="cw-return-home"><a href="#codex-workbench-home">⌂ 返回工作台首页</a></div>\n\n## 今日聚焦\n\n<!-- cw-priority -->\n今天最重要的一件事：\n<!-- /cw-priority -->\n\n## 随手记录\n\n## 今日复盘\n- 今天推进了什么：\n- 卡在哪里：\n- 明天的第一步：\n\n## 专注记录\n\n| 结束时间 | 任务 | 分钟 | 结果 |\n| --- | --- | ---: | --- |\n`); }
   async openDaily() { return this.run(async()=>{const f=await this.daily(); await this.open(f.path);}); }
+  async archiveQuickNote(markdown) {
+    return this.run(async()=>{
+      const file=await this.daily();
+      await this.app.vault.process(file,content=>insertQuickNote(content,markdown));
+      this.data.quickNotesDraft='';
+      await this.save();
+    });
+  }
   async writePriority(key = day()) { const f=await this.daily(new Date(key+'T12:00:00').getTime()); const value=`<!-- cw-priority -->\n今天最重要的一件事：${this.data.priorities[key] || ''}\n<!-- /cw-priority -->`; await this.app.vault.process(f,c=>c.includes('<!-- cw-priority -->')?c.replace(/<!-- cw-priority -->[\s\S]*?<!-- \/cw-priority -->/,()=>value):c+'\n'+value+'\n'); }
   updatePriority(value, showNotice = false, key = day()) { return this.run(async()=>{ this.data.priorities[key] = clean(value); await this.save(); await this.writePriority(key); await this.syncDailySummary(); if(showNotice) new Notice('今日要务已保存到日记。'); }); }
   /** 不经过 this.run 的要务写入：供 FocusSelection 在自己的队列里调用，避免队列自锁。 */

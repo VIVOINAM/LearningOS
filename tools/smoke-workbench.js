@@ -118,6 +118,8 @@ const obsidian = {
   ItemView: class ItemView { constructor(leaf) { this.leaf = leaf; this.containerEl = fakeElement(); this.contentEl = fakeElement(); } registerEvent() {} },
   Modal: class Modal { constructor(app) { this.app = app; this.contentEl = fakeElement(); } open() {} close() {} },
   Notice: class Notice {},
+  Component: class Component { load() {} unload() {} },
+  MarkdownRenderer: { render: async (_app, markdown, target) => { target.textContent = markdown; } },
   Menu: class Menu {},
   setIcon: () => {},
   requestUrl: async () => ({ json: { current: { temperature_2m: 20, weather_code: 0 } } }),

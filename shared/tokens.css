@@ -44,8 +44,11 @@
      于是层级只能靠「更淡」表达，淡到一定程度就只剩浑浊。
      换成一个不同色相的深绿，层级由色相承担，明度就可以留得很深——
      它对白卡 9.73，比旧值还高，却明显不是正文。 */
-  /* 规格给的是 #7C756E，在次级面上是 3.64，低于 AA。保色相压暗到刚好过 4.5。 */
-  --os-muted: #6C6660;
+  /* 规格给的是 #7C756E，在次级面上是 3.64，低于 AA；6.5 保色相压暗到「刚好过 4.5」，
+     得到 #6C6660。固定的底上那是合格线，不受控的底上那是必然失守——余量为零。
+     实拍壁纸上量到 2.43 / 2.72 / 3.35 三处，全是这个值铺出来的。
+     7.0 压到对 --os-paper 7.0 以上，留出一档给背景浮动。 */
+  --os-muted: #57514A;
 
   /* 墨绿从「次要文字」退回本职：强调、选中态、进度。次要文字改用中性暖灰——
      整页的小字全是绿的时候，绿就不再是强调色了。 */
@@ -66,30 +69,56 @@
      这几个值是 rgba，不进对比度闸门——闸门只认字面十六进制。
      文字实际压在什么底上，由下面的 --os-paper 记录：那是玻璃叠在页面底上
      算出来的等效色。闸门量的是它，而不是这层半透明本身。 */
-  --os-glass: rgba(255, 255, 255, 0.58);
+  --os-glass: rgba(255, 255, 255, 0.68);
   --os-glass-strong: rgba(255, 255, 255, 0.72);
   --os-glass-soft: rgba(255, 255, 255, 0.38);
   --os-glass-field: rgba(255, 255, 255, 0.54);
   --os-glass-hover: rgba(255, 255, 255, 0.74);
-  --os-glass-rail: rgba(255, 255, 255, 0.32);
-  /* 专注卡面积最大，需要比普通面板更强的明暗折射，否则会重新读成一块白卡。 */
+  --os-glass-rail: rgba(255, 255, 255, 0.54);
+  /* 专注卡面积最大，普通玻璃会在大面积上重新读成白色实心卡。
+     单独提高折射并降低底色浓度，让壁纸轮廓真正穿过卡面。 */
   --os-focus-glass:
-    linear-gradient(135deg, rgba(255,255,255,.62) 0%, rgba(255,255,255,.16) 48%, rgba(255,255,255,.38) 100%),
-    rgba(255,255,255,.20);
+    linear-gradient(135deg, rgba(255,255,255,.48) 0%, rgba(255,255,255,.08) 48%, rgba(255,255,255,.26) 100%),
+    rgba(255,255,255,.12);
   --os-focus-sheen:
-    radial-gradient(ellipse at 12% 0%, rgba(255,255,255,.70), transparent 42%),
+    radial-gradient(ellipse at 12% 0%, rgba(255,255,255,.68), transparent 42%),
     radial-gradient(ellipse at 92% 100%, rgba(150,61,46,.10), transparent 45%);
   --os-focus-blur: blur(28px) saturate(165%);
-  /* 壁纸让模糊重新有了可见的细节来源。统一由这一枚令牌控制，所有工作台面板、
-     学习侧栏和产品弹窗共享同一套折射强度。 */
-  --os-glass-blur: blur(20px) saturate(140%);
+  --os-focus-clamp: blur(28px) saturate(165%) contrast(.42) brightness(1.18);
+  /* 6.6.1 把这个值设成 none，并在这里写下：「将来页面底换成有细节的东西
+     （图片、噪点、真实内容穿透），模糊就重新有意义了，那时把它改回来即可。」
+     6.7 的聚焦壁纸就是那个东西，但没人回来翻这个令牌。7.0 翻回来了。
+
+     不是单纯的 blur——**把一片亮天空模糊之后仍然是一片亮天空**。模糊削掉的是
+     高频细节，平均亮度一点没变，而对比度输在平均亮度上。所以后面跟着钳位：
+     contrast(.38) 把任意背景往中灰压，brightness(1.22) 再整体抬起来，
+     于是不管背后是雪山、深海还是纯黑，透到面板上的那一层都落进一条已知的窄带，
+     再叠 --os-glass 的白。文字压着的底因此有下限，而不是每天换一张图就换一套。
+
+     钳位的具体数值不是挑好看挑出来的，是 tools/legibility.cjs 在七种对抗背景上
+     量出来的——改这里必须重跑它。 */
+  --os-glass-blur: none;
+  --os-glass-clamp: blur(18px) saturate(130%) contrast(.38) brightness(1.22);
+  /* 托底层。和 --os-scrim 是两件事：--os-scrim 归用户那个「图片可见度」滑块管，
+     可以一路滑到 0；这一层归闸门管，滑块碰不到它。页面级文字（页标题、副标题、
+     页头元信息）不在任何面板里，直接压着照片，靠的就是它。 */
+  --os-scrim-floor: rgba(250, 248, 244, 0.78);
+  /* 分段控件选中态那块「浮在槽里的象牙玻璃」。6.6 写成字面量 rgba(255,255,255,.58)，
+     没有深色分支——深色下它是一块浅灰药丸压着浅鼠尾草绿的字，实测 1.12。
+     两道闸门都没拦住：check.js 的色值规则只匹配六位十六进制，contrast.js 的
+     themes() 同样只收十六进制，rgba 对它们不存在。收成令牌，两边才量得到。 */
+  --os-mode-glass: rgba(255, 255, 255, 0.72);
+  --os-mode-ink: #2E4A3B;
   --os-glass-lit: rgba(255, 255, 255, 0.85);      /* 受光的上缘与左缘 */
   --os-glass-shade: rgba(130, 115, 95, 0.12);     /* 背光的下缘与右缘 */
   --os-glass-inset: inset 0 1px 1px rgba(255, 255, 255, 0.9);
   --os-glass-drop: 0 12px 30px rgba(50, 40, 30, 0.05);
-  --os-glass-recess: rgba(0, 0, 0, 0.04);         /* 凹陷的分段控件槽 */
+  /* 凹陷的分段控件槽。6.6 是 rgba(0,0,0,.04)——4% 的黑压在一块平色上能读成凹陷，
+     压在照片上什么都不是，而槽里那两个未选中的字就直接坐在壁纸上（实测最低 1.70）。
+     改成有浓度的暖白：凹陷感改由下面那道 inset 阴影承担，它不依赖背后是什么。 */
+  --os-glass-recess: rgba(237, 233, 224, 0.74);
   /* 壁纸上保留一层较轻的遮罩：让照片能被看清，同时继续托住正文。 */
-  --os-scrim: rgba(248, 246, 241, var(--os-scrim-opacity, 0.76));
+  --os-scrim: rgba(248, 246, 241, var(--os-scrim-opacity, 0.86));
 
   /* 赤陶大漆：渐变加顶面高光，做出「一块有厚度的漆」而不是一块色。 */
   --os-lacquer: linear-gradient(145deg, #963D2E, #7A2E20);
@@ -157,6 +186,20 @@
   --os-mark-purple-chip: #b49add;
 }
 
+/* 钳位只在背后真有照片时生效。
+ *
+ * 无条件开会坏事：钳位把「任意背景」压进一条窄带，而没有壁纸时那个「任意背景」
+ * 就是 --os-bg 那块暖燕麦——contrast(.38) 把它拖向中灰，brightness 再抬起来，
+ * 得到的是一块灰。第一版无条件开，页头天气那张卡直接变成一个灰方块。
+ *
+ * 开关归 codex-widgets：它是唯一知道「今天挂没挂图」的人。和 --os-wallpaper
+ * 一样，它只在 body 上留一个声明，不需要知道 .os-root 长什么样。
+ * 类不在时这两个令牌各自退回 6.8 的值，样式表里没有任何分支。 */
+body.os-wallpaper-on {
+  --os-glass-blur: var(--os-glass-clamp);
+  --os-focus-blur: var(--os-focus-clamp);
+}
+
 body.theme-dark {
   /* 深色跟着换：底色从暖棕转成中性偏绿的墨色，次要文字用浅鼠尾草绿——
      和浅色那套是同一个判断的两个方向，不是两套独立配色。 */
@@ -166,28 +209,40 @@ body.theme-dark {
   --os-line: #5C6458;
   --os-ink: #EDEAE1;
   --os-body: #DAD5CC;
-  --os-muted: #AEA49A;
+  /* 和浅色同一个理由，方向相反：留余量要往亮走。旧值 #AEA49A 对深色卡 5.6，
+     壁纸一透进来就不够。 */
+  --os-muted: #C9C0B4;
   --os-sage: #A9BBA5;
   --os-accent-2: #A9BBA5;
 
-  --os-glass: rgba(42, 48, 42, 0.58);
+  --os-glass: rgba(56, 62, 55, 0.62);
   --os-glass-strong: rgba(42, 48, 42, 0.76);
   --os-glass-soft: rgba(42, 48, 42, 0.40);
   --os-glass-field: rgba(42, 48, 42, 0.64);
   --os-glass-hover: rgba(58, 66, 57, 0.76);
-  --os-glass-rail: rgba(32, 37, 32, 0.42);
+  --os-glass-rail: rgba(56, 62, 55, 0.52);
+  /* 钳位在深色下是同一个判断的另一个方向：浅色把任意背景往白抬，深色往墨压。
+     brightness 小于 1 而不是大于 1，其余同理。不给深色单独写一份，深色就会
+     继承浅色那条 brightness(1.22)——把壁纸在深色主题下抬亮，正好抬反。 */
+  --os-glass-clamp: blur(18px) saturate(115%) contrast(.34) brightness(.42);
+  --os-focus-clamp: blur(28px) saturate(140%) contrast(.38) brightness(.46);
+  --os-scrim-floor: rgba(18, 21, 18, 0.78);
+  /* 深色下选中块要比槽亮，但不能亮到变成一块浅灰——字是浅色的。
+     压成一层薄的暖白，字改用最亮的那一级。 */
+  --os-mode-glass: rgba(236, 240, 233, 0.16);
+  --os-mode-ink: #EDEAE1;
   --os-focus-glass:
-    linear-gradient(135deg, rgba(255,255,255,.13) 0%, rgba(255,255,255,.025) 48%, rgba(255,255,255,.08) 100%),
-    rgba(25,30,25,.38);
+    linear-gradient(135deg, rgba(255,255,255,.12) 0%, rgba(255,255,255,.02) 48%, rgba(255,255,255,.07) 100%),
+    rgba(20,25,20,.30);
   --os-focus-sheen:
-    radial-gradient(ellipse at 12% 0%, rgba(255,255,255,.15), transparent 42%),
+    radial-gradient(ellipse at 12% 0%, rgba(255,255,255,.14), transparent 42%),
     radial-gradient(ellipse at 92% 100%, rgba(224,140,99,.10), transparent 45%);
   --os-glass-lit: rgba(255, 255, 255, 0.10);
   --os-glass-shade: rgba(0, 0, 0, 0.35);
   --os-glass-inset: inset 0 1px 1px rgba(255, 255, 255, 0.07);
   --os-glass-drop: 0 12px 30px rgba(0, 0, 0, 0.28);
-  --os-glass-recess: rgba(0, 0, 0, 0.22);
-  --os-scrim: rgba(23, 26, 23, var(--os-scrim-opacity, 0.78));
+  --os-glass-recess: rgba(10, 13, 10, 0.62);
+  --os-scrim: rgba(23, 26, 23, var(--os-scrim-opacity, 0.86));
   --os-lacquer: linear-gradient(145deg, #B0523E, #8C3A2A);
   --os-lacquer-glow: inset 0 1px 0 rgba(255, 255, 255, 0.18), 0 6px 18px rgba(0, 0, 0, 0.35);
 

@@ -4,6 +4,8 @@ const {el, btn: domBtn}=require('../shared/dom');
 const {budget}=require('./budget');
 const {ItemView, Modal, Notice, setIcon} = require('obsidian');
 const {dueState} = require('./due');
+const {renderMarkdown,markdownOwner} = require('../codex-study/core/markdown-render');
+const {toObsidianMarkdown,changesOnPaste} = require('../codex-study/core/formula-model');
 const {dayKey, focusSnapshot, studySnapshot, heatmapData, taskPresentation, estimateAccuracy, rankTodayTasks} = require('./console-model');
 // 5.3 把六个页内分段提到了顶层，理由是「藏得太深」。6.3 收回去，理由是
 // 那六个目的地的数据量撑不起一个顶层入口——疑问常年 1 条，课程九张卡片里
@@ -122,7 +124,7 @@ class ConsoleView extends ItemView {
     this.registerEvent(this.plugin.app.workspace.on('codex-focus:finished', () => this.refresh().catch(console.error)));
     await this.refresh();
   }
-  async onClose() { this.closed = true; ++this.generation; this.plugin.views.delete(this); for (const mount of this.widgetMounts || []) mount.destroy?.(); this.widgetMounts = []; this.widgetMount = null; clearTimeout(this.searchTimer); clearTimeout(this.blurTimer); }
+  async onClose() { this.closed = true; ++this.generation; this.plugin.views.delete(this); if(this.quickNotesTimer){clearTimeout(this.quickNotesTimer);await this.plugin.save().catch(console.error);} clearTimeout(this.quickNotesPreviewTimer); this.quickNotesOwner?.unload?.(); for (const mount of this.widgetMounts || []) mount.destroy?.(); this.widgetMounts = []; this.widgetMount = null; clearTimeout(this.searchTimer); clearTimeout(this.blurTimer); }
   /**
    * 页头第二行：这一页自己的状态。
    *
@@ -433,13 +435,24 @@ class ConsoleView extends ItemView {
   renderToday() {
     const mobile = el(this.content,'div','os-mobile-switch');
     for (const [id,label] of [['actions','今日行动'],['focus','专注与阅读']]) btn(mobile,label,()=>{this.mobilePane=id;return this.refresh(true);},this.mobilePane===id?'is-active':'');
+    // 三栏：专注与阅读 / 今日要务与统计 / 下一步行动。
+    //
+    // 6.x 一直是两栏（左：今日要务 + 下一步行动，右：专注 + 阅读），于是左栏
+    // 同时装着「今天做哪一件」和「今天还剩哪些」——一个决定和一份清单叠在一列里，
+    // 谁也不像主角。拆成三栏之后每一栏只回答一个问题：现在在干什么、
+    // 今天最重要的是什么、接下来做什么。
     const layout = el(this.content,'div',`os-today-grid os-mobile-${this.mobilePane}`);
-    const left = el(layout,'div','os-today-left');
-    const intent = el(left,'section','os-intent');
+
+    const focusCol = el(layout,'div','os-today-col is-focus');
+    this.renderFocus(focusCol);
+    this.renderResume(focusCol);
+
+    const intentCol = el(layout,'div','os-today-col is-intent');
+    const intent = el(intentCol,'section','os-intent');
     el(intent,'p','os-overline','今日要务');
     this.renderFocusWidget(intent);
-    const metrics = el(intent,'div','os-metrics');
-    for (const [value,label] of [[this.snapshot.stats.done,'今日完成'],[this.snapshot.focus.todayMinutes,'专注分钟'],[this.snapshot.study.todayPages,'阅读页数']]) {const m = el(metrics,'div'); el(m,'strong','',String(value));el(m,'span','',label);}
+    this.renderStats(intentCol);
+    this.renderQuickNotes(intentCol);
     // 排序里加了课程紧迫度：考试临近、本周没碰过的课，它的任务排到前面。
     // 界面上不加任何新元素，变的只是顺序——课程页早就知道考试日期和本周时长，
     // 只是这些数从来没流到今日页来。
@@ -449,15 +462,54 @@ class ConsoleView extends ItemView {
       courseOf: task => this.plugin.courseIdFor?.(task) || '',
       currentTask: this.plugin.data.timer?.task || '',
     });
-    const action = this.panel(left,'下一步行动','按紧迫度排序：逾期、今天截止、考试临近的课','os-grow');
+    const actionCol = el(layout,'div','os-today-col is-actions');
+    const action = this.panel(actionCol,'下一步行动','按紧迫度排序：逾期、今天截止、考试临近的课','os-grow');
     btn(action.tools,'全部行动 →',()=>this.setTab('tasks'),'os-quiet');
     if (!this.snapshot.todayTasks.length) {
       this.empty(action.body,'今天还没有安排','新建任务，或到行动页把已有事项安排到今天。');
       btn(action.body,'安排一个行动',()=>this.plugin.captureTask(),'os-primary');
     }
     for (const task of ranked) this.taskRow(action.body,task,true);
-    const right = el(layout,'div','os-today-right'); this.renderFocus(right);
-    const resume = this.panel(right,'继续阅读','','os-resume');
+  }
+  /**
+   * 统计数据。三块读数加一张近 12 周的热力图。
+   *
+   * 读数原来挂在「今日要务」那张卡里，和「今天做哪一件」挤在一起。那张卡问的是
+   * 一个决定，这三个数回答的是一次回顾——两件事不该共用一张卡，也不该共用一个标题。
+   *
+   * 热力图读的是同一份 snapshot.heatmap，和「回顾 → 学习热力」那页同源。
+   * 这里只画格子，不做选中态：两处各存一份「当前选的是哪天」一定会漂，
+   * 而这块的职责只是「最近在不在学」。点它跳到那一页，详情归那一页。
+   */
+  renderStats(parent) {
+    const stats = this.panel(parent,'统计数据','','os-stats');
+    const tiles = el(stats.body,'div','os-stat-tiles');
+    for (const [value,label] of [
+      [this.snapshot.stats.done,'今日完成'],
+      [this.snapshot.focus.todayMinutes,'专注分钟'],
+      [this.snapshot.study.todayPages,'阅读页数'],
+    ]) {
+      const tile = el(tiles,'div','os-stat-tile');
+      el(tile,'strong','',String(value));
+      el(tile,'span','',label);
+    }
+
+    const heat = this.snapshot.heatmap;
+    if (!heat?.days?.length) return;
+    const todayKey = dayKey();
+    const mini = btn(stats.body,'',()=>this.setTab('heatmap'),'os-heat-mini');
+    mini.title = `近 ${heat.weeks} 周 · ${heat.totalSessions} 个番茄钟 · ${heat.activeDays} 天有记录`;
+    mini.setAttribute('aria-label',`${mini.title}，点击查看学习热力`);
+    const grid = el(mini,'span','os-heat-mini-grid');
+    grid.style.gridTemplateColumns = `repeat(${heat.weeks}, minmax(0, 1fr))`;
+    for (const [index,day] of heat.days.entries()) {
+      const cell = el(grid,'i',`os-heat-cell os-heat-level-${day.level}${day.key>todayKey?' is-future':''}`);
+      cell.style.gridColumn = String(Math.floor(index/7)+1);
+      cell.style.gridRow = String(index%7+1);
+    }
+  }
+  renderResume(parent) {
+    const resume = this.panel(parent,'继续阅读','','os-resume');
     const path = this.plugin.data.lastTextbook;
     if (path) {
       el(resume.body,'strong','os-book-title',title(path));
@@ -479,6 +531,45 @@ class ConsoleView extends ItemView {
       }
       btn(resume.body,'打开教材 ↗',()=>this.plugin.openLastTextbook(),'os-quiet');
     } else {el(resume.body,'p','os-muted','从课程或教材库开始，阅读位置会保存在这里。');btn(resume.body,'选择教材',()=>this.setTab('books'),'os-quiet');}
+  }
+  /** 学习中随手记，不切页、不碰当前番茄钟；归档时才写今日日记。 */
+  renderQuickNotes(parent) {
+    const card = this.panel(parent,'闪念','自动保存','os-scratchpad');
+    const input = el(card.body,'textarea','os-scratchpad-input');
+    input.rows = 3; input.value = this.plugin.data.quickNotesDraft || '';
+    input.placeholder = '丢下一句想法；粘贴 \\( \\) 或 \\[ \\] 公式会自动排版…';
+    input.setAttribute('aria-label','快捷闪念草稿'); input.spellcheck = false;
+    const preview = el(card.body,'div','os-scratchpad-preview');
+    preview.setAttribute('aria-live','polite'); preview.setAttribute('aria-label','闪念排版预览');
+    this.quickNotesOwner ||= markdownOwner();
+    const paint = () => {
+      const markdown = toObsidianMarkdown(input.value);
+      if (!markdown) {
+        preview.replaceChildren(); preview.classList.remove('markdown-rendered','is-raw');
+        el(preview,'span','os-scratchpad-placeholder','LaTeX 与 Markdown 预览'); return;
+      }
+      renderMarkdown(this.plugin.app,this.quickNotesOwner,preview,markdown,`05 日记/${dayKey()}.md`);
+    };
+    const persist = () => {
+      this.plugin.data.quickNotesDraft = input.value.slice(0,20000);
+      clearTimeout(this.quickNotesTimer);
+      this.quickNotesTimer = setTimeout(() => this.plugin.save().catch(error => new Notice(`闪念未保存：${error.message}`)),320);
+    };
+    const clear = async () => {
+      clearTimeout(this.quickNotesTimer); input.value=''; this.plugin.data.quickNotesDraft='';
+      await this.plugin.save(); paint(); input.focus();
+    };
+    const archive = async () => {
+      clearTimeout(this.quickNotesTimer); const markdown=toObsidianMarkdown(input.value);
+      if(!markdown){new Notice('先写下一点内容。');input.focus();return;}
+      await this.plugin.archiveQuickNote(markdown);input.value='';paint();input.focus();new Notice('闪念已写入今日日记。');
+    };
+    btn(card.tools,'清空',clear,'os-quiet').setAttribute('aria-label','清空快捷闪念草稿');
+    btn(card.tools,'存入日记',archive,'os-primary').setAttribute('aria-label','把快捷闪念写入今日日记');
+    input.addEventListener('input',()=>{persist();clearTimeout(this.quickNotesPreviewTimer);this.quickNotesPreviewTimer=setTimeout(paint,220);});
+    input.addEventListener('paste',event=>{const text=event.clipboardData?.getData('text/plain');if(!text||!changesOnPaste(text))return;event.preventDefault();input.setRangeText(toObsidianMarkdown(text),input.selectionStart||0,input.selectionEnd||0,'end');persist();paint();});
+    input.addEventListener('keydown',event=>{if(!event.isComposing&&event.key==='Enter'&&(event.ctrlKey||event.metaKey)){event.preventDefault();archive().catch(error=>new Notice(error.message));}});
+    paint();
   }
   taskRow(parent, task, compact = false, options = {}) {
     const showProject = options.showProject !== false;

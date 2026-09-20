@@ -115,32 +115,51 @@ function usableWallpaper(size) {
 /**
  * 今天用哪一张。列表先按路径排序再取，是为了让同一天多次打开拿到同一张——
  * 目录读出来的顺序不保证稳定。
+ *
+ * shift 是「手动换一张」用的偏移量。在这之前它不存在，于是那个按钮只能
+ * 清掉插件里「当前是哪张」的记忆再调一遍——而这个函数是 (列表, 日期) 的
+ * 纯函数，同一天怎么算都是同一张。按钮重读了几 MB 的同一个文件，
+ * 重新建了一个 blob URL，界面一点没变，还弹「已换一张」。
+ *
+ * 偏移在池子里绕圈，所以按到底会回到起点，不会有「换不动了」的死角。
  */
-function pickWallpaper(paths, key = day()) {
+function pickWallpaper(paths, key = day(), shift = 0) {
   const pool = (Array.isArray(paths) ? paths : []).filter(Boolean).slice().sort();
   const at = dayIndex(key, pool.length);
-  return at < 0 ? "" : pool[at];
+  if (at < 0) return "";
+  const step = Math.trunc(Number(shift)) || 0;
+  return pool[(((at + step) % pool.length) + pool.length) % pool.length];
 }
 
 /**
- * 只返回时间本身，不带上午/下午。
+ * 当前该用的偏移量。手动挑的那张只在当天有效：第二天回到「今天该是哪张」，
+ * 否则今天往后拨的三张会永久跟着你，而「每天换一张」就成了「每天换一张、
+ * 但永远差三格」——一个没人能解释的状态。
+ */
+function wallpaperShift(wallpaper = {}, key = day()) {
+  if (!wallpaper || wallpaper.shiftDay !== key) return 0;
+  return Math.trunc(Number(wallpaper.shift)) || 0;
+}
+
+/**
+ * 二十四小时制，小时补零。7.0 起没有第二种。
  *
  * 6.4 最初把「上午 」拼在前面，结果在 196px 的左栏里「上午 7:55:50」放不下，
  * 27px 的大字折成两行、卡片从 62px 长到 99px，四个挂件加起来溢出 11px，
  * 挂件区冒出一条滚动条。时段是限定语，不该和读数抢同一行的宽度。
+ *
+ * 7.0 把十二小时制这个开关也删了，同一个理由的另一面：**补零和时段是一件事**。
+ * 时钟用 --os-serif 那支高反差衬线展示号，十二小时制不补零，于是 9:59 跳到
+ * 10:00 的那一刻读数宽一位——196px 的固定左栏、27px 的大字，那是看得见的抖动。
+ * 一个读数不该因为到了整点就改变自己占的宽度。
+ *
+ * 旧数据里的 clock.hour12 由 normalize 直接丢掉，不需要迁移代码。
  */
-function clockText(date, { hour12 = false, seconds = false } = {}) {
+function clockText(date, { seconds = false } = {}) {
   const pad = (n) => String(n).padStart(2, "0");
-  const h = date.getHours();
-  const hour = hour12 ? (h % 12 || 12) : h;
-  const parts = [hour12 ? String(hour) : pad(hour), pad(date.getMinutes())];
+  const parts = [pad(date.getHours()), pad(date.getMinutes())];
   if (seconds) parts.push(pad(date.getSeconds()));
   return parts.join(":");
-}
-
-/** 上午 / 下午。十二小时制才有，跟日期同行显示。 */
-function meridiem(date, { hour12 = false } = {}) {
-  return hour12 ? (date.getHours() < 12 ? "上午" : "下午") : "";
 }
 
 function dateText(date) {
@@ -168,6 +187,51 @@ const WMO_ICON = [
 function weatherIcon(code) {
   const hit = WMO_ICON.find(([codes]) => codes.includes(Number(code)));
   return hit ? hit[1] : "cloud";
+}
+
+/**
+ * 自绘图标画哪一幕。和 WMO_ICON 一一对应，分组也一样——
+ * 两张表分不开：lucide 那套是退路，退路和正路必须画的是同一件事，
+ * 否则「画不出来就退回 lucide」会在某些天气下换掉图的含义。
+ * weatherScenesCoverIcons() 把这一点钉死。
+ *
+ * 为什么是 id 而不是 SVG 字符串：core 不碰 DOM（见文件头）。图形由 main.js
+ * 用 createElementNS 建，这里只回答「画哪一幕」。顺带也避开 innerHTML。
+ */
+const WMO_SCENE = [
+  [[0], "sun"], [[1], "sun-cloud"], [[2], "cloud"], [[3], "overcast"],
+  [[45, 48], "fog"], [[51, 53, 55, 56, 57], "drizzle"],
+  [[61, 63, 65, 66, 67, 80, 81, 82], "rain"],
+  [[71, 73, 75, 77, 85, 86], "snow"],
+  [[95], "thunder"], [[96, 99], "hail"],
+];
+
+const SCENES = WMO_SCENE.map(([, id]) => id);
+
+function weatherScene(code) {
+  const hit = WMO_SCENE.find(([codes]) => codes.includes(Number(code)));
+  return hit ? hit[1] : "cloud";
+}
+
+/** 两张表的分组必须逐组相同。测试拿它当断言，不是拿来运行时判的。 */
+function weatherScenesCoverIcons() {
+  if (WMO_SCENE.length !== WMO_ICON.length) return false;
+  return WMO_SCENE.every(([codes], i) =>
+    codes.length === WMO_ICON[i][0].length && codes.every((c, j) => c === WMO_ICON[i][0][j]));
+}
+
+/**
+ * 图标该不该动。
+ *
+ * 三条里最要紧的是 stale：缓存过期、取数失败、没填坐标的时候，读数其实
+ * 是旧的，而一个还在下雨的图标会让人以为它是刚取回来的。**用动效表达一个
+ * 没更新的读数，就是用展示效果编数据**——协作规则第四条挡的正是这件事。
+ *
+ * reduced 走 prefers-reduced-motion；hidden 走文档可见性：窗口不在前台时
+ * 不必让合成器一直转，6.6.1 那一轮刚为同类开销付过账。
+ */
+function weatherAnimated({ stale = false, reduced = false, hidden = false } = {}) {
+  return !stale && !reduced && !hidden;
 }
 
 function weatherText(code) {
@@ -290,11 +354,17 @@ function normalize(raw) {
     schemaVersion: 1,
     // 第一次安装：时间和每日一言开着，倒计日和天气等你填了内容再说。
     order: normalizeOrder(source.order),
-    clock: { hour12: clock.hour12 === true, seconds: clock.seconds === true, date: clock.date !== false },
+    clock: { seconds: clock.seconds === true, date: clock.date !== false },
     quote: { lines: lines && lines.length ? lines.slice(0, 200) : DEFAULT_QUOTES.slice() },
     countdown: { items: normalizeCountdownItems(source.countdown?.items), max: clamp(source.countdown?.max, 1, 8, 3) },
     // 默认开：用户要的就是这个。读不到聚焦目录时自己退回渐变，不会留下坏掉的界面。
-    wallpaper: { on: source.wallpaper?.on !== false, visibility: wallpaperVisibility(source.wallpaper?.visibility) },
+    wallpaper: {
+      on: source.wallpaper?.on !== false,
+      visibility: wallpaperVisibility(source.wallpaper?.visibility),
+      // 手动换一张的偏移，连同它属于哪一天。跨日作废，见 wallpaperShift。
+      shift: clamp(source.wallpaper?.shift, 0, 999, 0),
+      shiftDay: text(source.wallpaper?.shiftDay).slice(0, 10),
+    },
     weather: {
       lat: roundCoord(weather.lat),
       lon: roundCoord(weather.lon),
@@ -333,7 +403,8 @@ module.exports = {
   KINDS, LABELS, DEFAULT_QUOTES, DEFAULT_SLOT, SLOTS, SLOT_LABELS,
   normalize, normalizeOrder, normalizeCountdownItems, activeWidgets,
   validDate, daysUntil, countdownLabel, sortedCountdowns,
-  pickQuote, dayIndex, clockText, meridiem, dateText,
-  jpegSize, usableWallpaper, pickWallpaper, wallpaperVisibility,
-  weatherText, weatherIcon, weatherStale, weatherUrl, weatherFromResponse, roundCoord,
+  pickQuote, dayIndex, clockText, dateText,
+  jpegSize, usableWallpaper, pickWallpaper, wallpaperShift, wallpaperVisibility,
+  weatherText, weatherIcon, weatherScene, weatherScenesCoverIcons, weatherAnimated, SCENES,
+  weatherStale, weatherUrl, weatherFromResponse, roundCoord,
 };

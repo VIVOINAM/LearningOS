@@ -35,17 +35,48 @@ test('每日一言：同一天同一句，换日才换，空池返回空串', ()
   assert.equal(core.pickQuote(['  '], '2026-09-19'), '', '只有空白的一行不算一句');
 });
 
-test('时钟文本：补零、十二小时制、秒；时段不占读数那一行', () => {
+test('时钟文本：只有二十四小时制，读数宽度一天里不变', () => {
   const morning = new Date(2026, 8, 19, 9, 5, 7);
   assert.equal(core.clockText(morning), '09:05');
   assert.equal(core.clockText(morning, {seconds:true}), '09:05:07');
-  assert.equal(core.clockText(morning, {hour12:true}), '9:05', '上午/下午不进这个字符串——196px 的左栏放不下');
-  assert.equal(core.clockText(new Date(2026, 8, 19, 0, 0), {hour12:true}), '12:00', '零点是 12 点，不是 0 点');
-  assert.equal(core.clockText(new Date(2026, 8, 19, 13, 0), {hour12:true}), '1:00');
-  assert.equal(core.clockText(new Date(2026, 8, 19, 13, 0), {hour12:true, seconds:true}), '1:00:00');
-  assert.equal(core.meridiem(morning, {hour12:true}), '上午');
-  assert.equal(core.meridiem(new Date(2026, 8, 19, 12, 0), {hour12:true}), '下午', '正午算下午');
-  assert.equal(core.meridiem(morning), '', '二十四小时制不显示时段');
+  assert.equal(core.clockText(new Date(2026, 8, 19, 0, 0)), '00:00', '零点是 00，不是 12');
+  assert.equal(core.clockText(new Date(2026, 8, 19, 13, 0)), '13:00');
+
+  // 7.0 删掉十二小时制的真正理由：读数不许在一天里改变自己占的宽度。
+  // 时钟用的是 --os-serif 的展示号，在 196px 的固定左栏里，宽一位就是看得见的抖动。
+  // 这条断言比「等于 09:05」重要——它挡的是「哪天又加回一个不补零的开关」。
+  const widths = new Set();
+  for (let h = 0; h < 24; h++) widths.add(core.clockText(new Date(2026, 8, 19, h, 0)).length);
+  assert.deepEqual([...widths], [5], '一天 24 个整点，读数长度必须只有一种');
+
+  // 旧数据里的 hour12 要被 normalize 丢掉，而不是留在设置对象里等人再读它。
+  const data = core.normalize({clock:{hour12:true, seconds:true, date:true}});
+  assert.equal('hour12' in data.clock, false, 'hour12 是删掉的字段，不许被带回来');
+  assert.equal(core.clockText(new Date(2026, 8, 19, 13, 0), data.clock), '13:00:00');
+});
+
+test('天气图标：自绘和退路画的是同一件事，且每个码都画得出来', () => {
+  // 自绘那张表和 lucide 那张表分组必须逐组相同。不然「画不出来就退回 lucide」
+  // 会在某些天气下换掉图的含义——退路和正路指的得是同一件事。
+  assert.equal(core.weatherScenesCoverIcons(), true, 'WMO_SCENE 和 WMO_ICON 的分组必须一一对应');
+
+  // WMO 表里出现过的每一个码都要有一幕，而且那一幕必须在已知的十幕里。
+  // 漏一个的后果不是报错，是页头上出现一朵和天气无关的云。
+  const codes = [0,1,2,3,45,48,51,53,55,56,57,61,63,65,66,67,71,73,75,77,80,81,82,85,86,95,96,99];
+  for (const code of codes) {
+    assert.ok(core.SCENES.includes(core.weatherScene(code)), `码 ${code} 落到了未知的一幕`);
+  }
+  assert.equal(new Set(core.SCENES).size, core.SCENES.length, '幕的 id 不许重名');
+});
+
+test('天气图标：读数没更新时不许动', () => {
+  // 最要紧的一条。一个还在下雨的图标配一个三小时前的温度，比不画动画糟——
+  // 那是用展示效果表达一个其实没发生的更新。
+  assert.equal(core.weatherAnimated({}), true, '默认（数据新、没减少动态、窗口在前台）才动');
+  assert.equal(core.weatherAnimated({stale: true}), false, '缓存过期 / 取数失败：静止');
+  assert.equal(core.weatherAnimated({reduced: true}), false, 'prefers-reduced-motion：静止');
+  assert.equal(core.weatherAnimated({hidden: true}), false, '窗口不在前台：静止');
+  assert.equal(core.weatherAnimated({stale: true, reduced: true, hidden: true}), false);
 });
 
 test('天气：坐标降精度、越界拒绝、WMO 码翻译、缓存过期', () => {
@@ -59,6 +90,9 @@ test('天气：坐标降精度、越界拒绝、WMO 码翻译、缓存过期', (
   assert.equal(core.weatherIcon(0), 'sun');
   assert.equal(core.weatherIcon(65), 'cloud-rain');
   assert.equal(core.weatherIcon(999), 'cloud', '认不出的码给一朵云，不给空字符串——页头会留一个空位');
+  assert.equal(core.weatherScene(0), 'sun');
+  assert.equal(core.weatherScene(65), 'rain');
+  assert.equal(core.weatherScene(999), 'cloud', '认不出的码也要有一幕可画');
   const now = Date.now();
   assert.equal(core.weatherStale(null, 60, now), true);
   assert.equal(core.weatherStale({at: now - 10 * 60000}, 60, now), false);
@@ -180,6 +214,48 @@ test('壁纸按日取：同一天同一张，与目录读出的顺序无关', ()
   assert.ok(week.size>1, '连续几天不该是同一张');
   assert.equal(core.pickWallpaper([],'2026-09-19'), '');
   assert.equal(core.pickWallpaper(null,'2026-09-19'), '');
+});
+
+test('换一张：偏移在池子里绕圈，按到底回到起点', () => {
+  // 6.8 之前「换一张」是坏的：它只清掉插件里「当前是哪张」的记忆再调一次，
+  // 而挑图是 (列表, 日期) 的纯函数，同一天怎么算都是同一张。
+  const pool = ['/c/a.jpg','/c/b.jpg','/c/c.jpg','/c/d.jpg'];
+  const k = '2026-09-19';
+  const seen = [0,1,2,3].map(i => core.pickWallpaper(pool, k, i));
+  assert.equal(new Set(seen).size, 4, '连按四次应当拿到四张不同的');
+  assert.equal(core.pickWallpaper(pool, k, 4), seen[0], '绕一圈回到起点，不该有换不动的死角');
+  assert.equal(core.pickWallpaper(pool, k, -1), seen[3], '负偏移也要落在池子里');
+  // 只有一张时按多少次都是它——调用方据此说「只有这一张」而不是谎报成功。
+  assert.equal(core.pickWallpaper(['/c/only.jpg'], k, 7), '/c/only.jpg');
+  // 脏值不能把索引算成 NaN，那会让背景整个消失。
+  for (const bad of [undefined, null, NaN, '', 'abc', {}]) {
+    assert.equal(core.pickWallpaper(pool, k, bad), seen[0], String(bad));
+  }
+});
+
+test('换一张：手动挑的那张只算当天', () => {
+  // 不作废的话，今天往后拨三张会永久跟着走，「每天换一张」变成
+  // 「每天换一张、但永远差三格」——一个没人能解释的状态。
+  assert.equal(core.wallpaperShift({shift:3, shiftDay:'2026-09-19'}, '2026-09-19'), 3);
+  assert.equal(core.wallpaperShift({shift:3, shiftDay:'2026-09-18'}, '2026-09-19'), 0);
+  assert.equal(core.wallpaperShift({shift:3}, '2026-09-19'), 0, '没记日期的旧数据当作没拨过');
+  assert.equal(core.wallpaperShift({}, '2026-09-19'), 0);
+  assert.equal(core.wallpaperShift(null, '2026-09-19'), 0);
+  assert.equal(core.wallpaperShift({shift:'x', shiftDay:'2026-09-19'}, '2026-09-19'), 0);
+});
+
+test('换一张：偏移进设置，且旧设置读得进来', () => {
+  const fresh = core.normalize({});
+  assert.equal(fresh.wallpaper.shift, 0);
+  assert.equal(fresh.wallpaper.shiftDay, '');
+  const kept = core.normalize({wallpaper:{shift:5, shiftDay:'2026-09-19'}});
+  assert.equal(kept.wallpaper.shift, 5);
+  assert.equal(kept.wallpaper.shiftDay, '2026-09-19');
+  // 6.8 之前存下来的设置里没有这两个键，读进来要有默认值而不是 undefined。
+  const old = core.normalize({wallpaper:{on:true, visibility:70}});
+  assert.equal(old.wallpaper.shift, 0);
+  assert.equal(old.wallpaper.on, true);
+  assert.equal(old.wallpaper.visibility, 70);
 });
 
 test('activeWidgets：开着但没内容的挂件不占位置', () => {

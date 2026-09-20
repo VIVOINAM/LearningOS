@@ -95,17 +95,39 @@
 .os-rail-foot {margin-top:auto;display:flex;flex-direction:column;gap:12px;flex-shrink:0}
 .os-root .os-capture {background:transparent;border:1px dashed var(--os-muted)}
 .os-local {font-size:var(--fs-meta);color:var(--os-muted);text-align:center;letter-spacing:1px}
-.os-main {display:flex;flex-direction:column;gap:16px;padding:18px 32px 10px;min-height:0;overflow:hidden}
+/* 层三：页头托底带。页标题、副标题、页头元信息不在任何面板里，直接压在壁纸上——
+   实拍图里它们量到 2.15 和 2.94。这里不给它们加盒子（那会让「优先做减法」失守），
+   加的是一道自上而下、看不出边界的暗化。高度盖住页头加一段淡出，
+   浓度走 --os-scrim-floor：归闸门管，用户那个图片可见度滑块碰不到。 */
+.os-main {display:flex;flex-direction:column;gap:16px;padding:18px 32px 10px;min-height:0;overflow:hidden;position:relative}
+.os-main::before {content:"";position:absolute;inset:0 0 auto;height:200px;pointer-events:none;z-index:0;
+  background:linear-gradient(var(--os-scrim-floor) 0%,var(--os-scrim-floor) 46%,transparent 100%)}
+/* 页脚同理：它也是页面级文字。第一版只做了页头，闸门把锚点表加宽之后
+   立刻量到页脚 1.07——同一个病，只是当时没人看它。 */
+.os-main::after {content:"";position:absolute;inset:auto 0 0;height:96px;pointer-events:none;z-index:0;
+  background:linear-gradient(transparent 0%,var(--os-scrim-floor) 62%,var(--os-scrim-floor) 100%)}
+.os-main>* {position:relative;z-index:1}
 .os-header {display:flex;align-items:center;justify-content:space-between;gap:18px;flex:none}
 .os-heading h1 {font-family:Georgia,"Songti SC","Noto Serif SC","Microsoft YaHei",serif;font-size:clamp(23px,2.1cqw,32px);font-weight:550;letter-spacing:-.7px;line-height:1.2}
-.os-page-status {font-size:var(--fs-meta);color:var(--os-muted);line-height:1.5;overflow-wrap:anywhere;min-width:0}
-.os-overline {font-size:var(--fs-meta);letter-spacing:1.2px;color:var(--os-muted);font-weight:600}
+/* 这两条是页面级文字：它们不在任何面板里，托底带是它们唯一的底。
+   所以不许用 --os-muted 那一级——「次要」是为有面的地方定的，余量只够那儿用。
+   规则：没有面的文字，最低走 --os-body。 */
+.os-page-status {font-size:var(--fs-meta);color:var(--os-body);line-height:1.5;overflow-wrap:anywhere;min-width:0}
+.os-overline {font-size:var(--fs-meta);letter-spacing:1.2px;color:var(--os-body);font-weight:600}
 .os-header-actions {display:flex;gap:8px;flex:none}
 .os-content {flex:1;min-height:0;overflow:hidden;display:flex;flex-direction:column}
-.os-footer {display:flex;align-items:center;justify-content:space-between;color:var(--os-muted);font-size:var(--fs-meta);min-height:24px;flex:none;gap:10px}
+.os-footer {display:flex;align-items:center;justify-content:space-between;color:var(--os-body);font-size:var(--fs-meta);min-height:24px;flex:none;gap:10px}
 .os-root .os-footer button {padding:2px 8px;min-height:22px;font-size:var(--fs-meta)}
-.os-today-grid {flex:1;min-height:0;display:grid;grid-template-columns:minmax(0,1.35fr) minmax(290px,.9fr);gap:22px;overflow:hidden}
-.os-today-left,.os-today-right {display:flex;flex-direction:column;gap:20px;min-height:0;overflow:hidden}
+/* 三栏：专注与阅读 / 今日要务与统计 / 下一步行动。
+   用 grid-template-areas 而不是顺序摆位——窄下来要把三栏折成两栏，
+   折的时候改的是这张表，不用动 DOM，也不用给某一栏加 order。 */
+.os-today-grid {flex:1;min-height:0;display:grid;gap:22px;overflow:hidden;
+  grid-template-columns:minmax(280px,1fr) minmax(250px,.92fr) minmax(0,1.42fr);
+  grid-template-areas:"focus intent actions"}
+.os-today-col {display:flex;flex-direction:column;gap:20px;min-height:0;overflow:hidden}
+.os-today-col.is-focus {grid-area:focus}
+.os-today-col.is-intent {grid-area:intent}
+.os-today-col.is-actions {grid-area:actions}
 /* 交互卡一律纯白，包括这张——它原来是全页唯一一块「像底」的卡。 */
 .os-intent {
   background:var(--os-glass);-webkit-backdrop-filter:var(--os-glass-blur);backdrop-filter:var(--os-glass-blur);
@@ -168,9 +190,27 @@
 /* 任务行动作平时收起：一行五个文字按钮会盖过任务本身。
    用 opacity 而不是 display:none —— 后者会把按钮移出 Tab 顺序，
    键盘和读屏就再也够不到了。focus-within 保证键盘操作时同样显现。 */
-.os-row-actions {display:flex;align-items:center;gap:2px;flex:none;opacity:0;transition:opacity .22s var(--os-ease)}
+/* 行内动作浮在行上，不占行宽。
+   原来是 flex:none + opacity:0——看不见，却照样占着 286px，而整行只有 495px：
+   任务标题分到 164px，于是标题折行、项目药丸被截成「本周学…」。
+   这和 6.1 抓到的「117px 行距里有一行是 0% 填充率的字段」是同一类：
+   不可见但占位。宽度不该为一组不显示的按钮预留。
+
+   不用 display:none 是因为那会让整行在 hover 的瞬间重排。改成绝对定位浮在右端，
+   底下垫一道往左淡出的实底，压住的文字不会和按钮糊在一起。 */
+.os-task-row {position:relative}
+.os-row-actions {display:flex;align-items:center;gap:2px;flex-wrap:nowrap;
+  position:absolute;right:0;top:50%;transform:translateY(-50%);z-index:2;
+  /* width:max-content 不能省。绝对定位之后这一块按「静态位置到右边缘」收缩，
+     那点宽度只有 122px，四个按钮折成四行、整块 182px 高，再被 top:50% 居中到
+     58px 的行上——上沿直接顶进工具条，点击被工具条拦掉。 */
+  width:max-content;max-width:calc(100% - 36px);
+  padding:2px 0 2px 30px;border-radius:9px;
+  background:linear-gradient(90deg,transparent 0,var(--os-paper) 26px);
+  opacity:0;pointer-events:none;transition:opacity .22s var(--os-ease)}
 .os-task-row:hover .os-row-actions,
-.os-task-row:focus-within .os-row-actions {opacity:1}.os-row-actions button {font-size:var(--fs-meta)!important}
+.os-task-row:focus-within .os-row-actions {opacity:1;pointer-events:auto}
+.os-row-actions button {font-size:var(--fs-meta)!important}
 .os-priority{color:var(--os-accent-2)}.is-done .os-task-title {text-decoration:line-through;color:var(--os-muted)}
 .os-focus {
   position:relative;isolation:isolate;
@@ -181,7 +221,7 @@
 }
 .os-focus::before {
   content:"";position:absolute;inset:0;z-index:0;pointer-events:none;border-radius:inherit;
-  background:var(--os-focus-sheen);opacity:.78;
+  background:var(--os-focus-sheen);opacity:.72;
 }
 .os-focus>.os-panel-head,.os-focus>.os-panel-body {position:relative;z-index:1}
 .os-focus .os-panel-body {display:flex;flex-direction:column;align-items:center;justify-content:safe center;padding:10px 20px 16px;text-align:center}
@@ -189,13 +229,15 @@
 
 /* 凹陷的分段控件：槽是一层压暗，选中项是一块浮在槽里的象牙玻璃。
    凹陷感全靠槽比周围暗这一点——没有它，三个按钮只是三个按钮。 */
-.os-modes {display:flex;gap:2px;padding:4px;border-radius:9999px;background:var(--os-glass-recess);flex:none;margin-bottom:14px}
+.os-modes {display:flex;gap:2px;padding:4px;border-radius:9999px;background:var(--os-glass-recess);flex:none;margin-bottom:14px;
+  box-shadow:inset 0 1px 3px rgba(0,0,0,.12),inset 0 -1px 0 rgba(255,255,255,.5)}
 .os-root .os-modes .os-mode {flex:1;min-width:0;border:0;background:transparent;border-radius:9999px;
   min-height:28px;padding:4px 10px;font-size:var(--fs-meta);color:var(--os-muted);box-shadow:none;
   transition:background .28s var(--os-ease),color .28s var(--os-ease),box-shadow .28s var(--os-ease)}
 .os-root .os-modes .os-mode:hover:not(.is-active):not(:disabled) {color:var(--os-body)}
-.os-root .os-modes .os-mode.is-active {background:var(--os-glass-hover);color:var(--os-sage);font-weight:600;
-  box-shadow:0 1px 3px rgba(50,40,30,.12),var(--os-glass-inset)}
+.os-root .os-modes .os-mode.is-active {background:var(--os-mode-glass);color:var(--os-mode-ink);font-weight:600;
+  -webkit-backdrop-filter:blur(10px);backdrop-filter:blur(10px);
+  box-shadow:0 1px 3px rgba(50,40,30,.12),inset 0 1px 0 rgba(255,255,255,.72)}
 .os-root .os-modes .os-mode:disabled {opacity:.55}
 
 /* 表盘。SVG 撑出方形，读数绝对定位居中——用 grid 叠放会让读数跟着圆环的
@@ -206,7 +248,7 @@
 .os-dial {position:relative;flex:none;width:clamp(116px,min(24cqh,52cqw),200px);aspect-ratio:1;margin:0 auto;display:grid;place-items:center;container-type:inline-size}
 .os-dial-svg {position:absolute;inset:0;width:100%;height:100%;transform:rotate(-90deg);overflow:visible}
 .os-dial-track {fill:none;stroke:var(--os-glass-shade);stroke-width:1.5}
-.os-dial-arc {fill:none;stroke:rgba(46,74,59,.8);stroke-width:1.5;stroke-linecap:round}
+.os-dial-arc {fill:none;stroke:var(--os-accent-2);stroke-width:1.5;stroke-linecap:round}
 
 /* 末端那颗小圆点带一层同色的柔光。柔光是第二个更大的半透明圆，不是 drop-shadow——
    滤镜每一帧都要重新栅格化，而这东西每秒都在动，代价直接变成肉眼可见的闪。 */
@@ -262,9 +304,24 @@
   border:1px solid var(--os-glass-shade);border-top-color:var(--os-glass-lit);box-shadow:var(--os-glass-inset)}
 
 .os-resume {flex:0 1 174px;min-height:110px}.os-resume .os-panel-head{padding-top:15px;padding-bottom:10px}.os-resume .os-panel-body{padding-bottom:12px}
+.os-scratchpad {flex:1 1 138px;min-height:126px}
+.os-scratchpad .os-panel-head {padding-top:9px;padding-bottom:6px}
+.os-scratchpad .os-panel-head h2 {font-size:13px;margin-top:0;white-space:nowrap}
+.os-scratchpad .os-overline {font-size:9px;line-height:1.2;letter-spacing:.5px;white-space:nowrap}
+.os-scratchpad .os-tools {gap:1px;flex-wrap:nowrap}
+.os-root .os-scratchpad .os-tools .os-button {min-height:27px;padding:3px 7px;font-size:10px;white-space:nowrap}
+.os-scratchpad .os-panel-body {display:grid;grid-template-rows:minmax(42px,.9fr) minmax(34px,1fr);gap:4px;padding-bottom:7px;overflow:hidden}
+.os-scratchpad-input {width:100%;min-height:42px;resize:none;padding:5px 9px;border:1px solid var(--os-line);border-radius:7px;background:var(--os-glass-field);color:var(--os-ink);font:inherit;font-size:10px;line-height:1.35;box-shadow:var(--os-glass-inset)}
+.os-scratchpad-input::placeholder {color:var(--os-muted)}
+.os-scratchpad-input:focus-visible {outline:2px solid var(--os-accent-2);outline-offset:1px}
+.os-scratchpad-preview {min-height:34px;padding:6px 9px;border:1px dashed var(--os-glass-shade);border-radius:7px;background:var(--os-glass-soft);overflow:auto;font-size:10px;line-height:1.45}
+.os-scratchpad-preview>:first-child {margin-top:0}.os-scratchpad-preview>:last-child {margin-bottom:0}
+.os-scratchpad-preview .math-block {overflow-x:auto;overflow-y:hidden}.os-scratchpad-preview mjx-container {color:var(--os-ink)}
+.os-scratchpad-preview.is-raw {font-family:var(--font-monospace);white-space:pre-wrap;overflow-wrap:anywhere;color:var(--os-danger)}
+.os-scratchpad-placeholder {color:var(--os-muted)}
 /* 阅读进度：一根细的橄榄绿液条。高度 3px——它是参考信息，不是这张卡的主角。 */
 .os-read-track {height:3px;border-radius:999px;background:var(--os-glass-recess);margin-top:9px;overflow:hidden}
-.os-read-fill {display:block;height:100%;border-radius:inherit;background:rgba(46,74,59,.8);transition:width .6s var(--os-ease)}
+.os-read-fill {display:block;height:100%;border-radius:inherit;background:var(--os-accent-2);transition:width .6s var(--os-ease)}
 .os-book-title {font-size:var(--fs-body);display:block;overflow:hidden;white-space:nowrap;text-overflow:ellipsis;font-weight:550}
 .os-muted {color:var(--os-muted);font-size:var(--fs-meta);line-height:1.6;overflow-wrap:anywhere;margin-top:4px!important}
 .os-toolbar {display:flex;justify-content:space-between;align-items:center;gap:16px;padding:0 22px 16px;flex:none;flex-wrap:wrap;border-bottom:1px solid var(--os-line)}
@@ -276,9 +333,45 @@
 .os-course h3 {font-size:var(--fs-title);font-weight:550;line-height:1.4}.os-course-next{color:var(--os-muted);font-size:var(--fs-body);line-height:1.6;flex:1;overflow-wrap:anywhere}
 .os-course-actions{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-top:auto}
 .os-pagination {display:flex;align-items:center;justify-content:center;gap:14px;padding:20px 0;font-size:var(--fs-meta);flex-wrap:wrap}
+/* ---------- 统计数据 ---------- */
+
+/* 中间栏新增闪念后，统计卡不参与 flex 收缩：收缩会让通用的 panel-body 自己滚，
+   结果三个读数的上半截被切掉。这里宁可让下面的闪念变矮，也不让只看一眼的统计卡滚。 */
+.os-stats {flex:0 0 auto}
+.os-stats .os-panel-head {padding-top:12px;padding-bottom:8px}
+.os-stats .os-panel-head h2 {font-size:16px;margin-top:0}
+.os-stats .os-panel-body {flex:none;overflow:hidden;padding-bottom:12px;scrollbar-gutter:auto}
+
+/* 三块读数做成瓦片，不再是一行并排的数字。并排那版挤在「今日要务」卡里，
+   和「今天做哪一件」共用一张卡——一个决定和一次回顾叠在一起，谁也不像主角。 */
+.os-stat-tiles {display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:6px;flex:none}
+.os-stat-tile {display:flex;flex-direction:column;align-items:center;gap:1px;
+  padding:7px 4px 6px;border-radius:10px;background:var(--os-glass-recess);
+  box-shadow:inset 0 1px 2px rgba(0,0,0,.05)}
+.os-stat-tile strong {font-family:var(--os-serif);font-size:24px;font-weight:400;
+  font-variant-numeric:tabular-nums;color:var(--os-ink);line-height:1.02}
+.os-stat-tile span {font-size:10px;color:var(--os-muted);text-align:center;
+  overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:100%}
+
+/* 迷你热力图。整块是一个按钮：这里只回答「最近在不在学」，
+   哪一天具体是什么归「回顾 → 学习热力」那一页，两处不各存一份选中态。 */
+.os-root .os-heat-mini {appearance:none;display:block;width:100%;margin-top:8px;padding:0;
+  border:0;background:transparent;box-shadow:none;cursor:pointer;min-height:0;
+  border-radius:8px;transition:opacity .2s var(--os-ease)}
+.os-root .os-heat-mini:hover {opacity:.78;background:transparent}
+.os-root .os-heat-mini:focus-visible {outline:2px solid var(--os-accent);outline-offset:3px}
+/* 格子是正方的。整页那版写的是 width:100% 加 height:16px，在 1fr 的列里
+   被拉成横向长方形，整块读成条纹表而不是热力图——那一处留给铺满那一轮。 */
+/* 收到 15px 一格。满宽时一格 22px，而这块只回答「最近在不在学」，
+   占的份量不该压过上面那三个读数。 */
+.os-heat-mini-grid {display:grid;grid-template-rows:repeat(7,minmax(0,1fr));gap:2px;
+  width:100%;max-width:178px}
+.os-heat-cell {display:block;aspect-ratio:1;border-radius:2px;min-width:0}
+.os-heat-cell.is-future {opacity:.3}
+
 .os-heat-summary {display:flex;align-items:baseline;gap:clamp(18px,3cqw,42px);padding:0 2px 2px;flex:none;flex-wrap:wrap}
 .os-heat-summary>div,.os-heat-day-stats>div {display:flex;align-items:baseline;gap:7px}
-.os-heat-summary strong {font-family:Georgia,serif;font-size:var(--fs-display);font-weight:400;font-variant-numeric:tabular-nums}
+.os-heat-summary strong {font-family:var(--os-serif);font-size:var(--fs-display);font-weight:400;font-variant-numeric:tabular-nums}
 .os-heat-summary span,.os-heat-day-stats span {font-size:var(--fs-meta);color:var(--os-muted)}
 .os-heat-layout {flex:1;min-height:0;display:grid;grid-template-columns:minmax(0,1.35fr) minmax(255px,.65fr);gap:18px;overflow:hidden}
 .os-heatmap-panel,.os-heat-detail {min-height:0}
@@ -304,7 +397,7 @@
 .os-heat-level-2 {--os-cell:var(--os-heat-2)}
 .os-heat-level-3 {--os-cell:var(--os-heat-3)}
 .os-heat-level-4 {--os-cell:var(--os-heat-4)}
-.os-root .os-heatmap-cell,.os-heat-swatch {background:var(--os-cell,var(--os-heat-0))!important}
+.os-root .os-heatmap-cell,.os-heat-swatch,.os-heat-cell {background:var(--os-cell,var(--os-heat-0))!important}
 .os-heatmap-legend {display:flex;align-items:center;justify-content:flex-end;gap:5px;margin-top:18px}
 .os-heat-swatch {display:block;width:13px;height:13px;border-radius:3px}
 .os-heat-detail .os-panel-body {padding-top:2px}
@@ -330,10 +423,12 @@
 .os-modules .os-file-row{justify-content:space-between}.os-modules h2{margin-top:0}
 @container (max-width:1150px) {
   .os-app{grid-template-columns:155px minmax(0,1fr)}.os-rail{padding:24px 10px 14px}.os-wordmark{font-size:12px}
-  .os-main{padding:22px 22px 8px;gap:16px}.os-today-grid{gap:16px;grid-template-columns:minmax(0,1.1fr) minmax(260px,.9fr)}
-  .os-today-left,.os-today-right{gap:16px}.os-panel-head{padding:17px 16px 12px}.os-panel-body{padding-left:16px;padding-right:16px}
+  .os-main{padding:22px 22px 8px;gap:16px}.os-today-grid{gap:16px;grid-template-columns:minmax(0,1fr) minmax(0,.9fr) minmax(0,1.3fr)}
+  .os-today-col{gap:16px}.os-panel-head{padding:17px 16px 12px}.os-panel-body{padding-left:16px;padding-right:16px}
   .os-intent{padding:17px}.os-metrics{gap:20px}.os-metrics>div{flex-direction:column;gap:0}.os-metrics strong{font-size:25px}
-  .os-task-row{gap:9px}.os-row-actions{flex-direction:column;align-items:flex-end}.os-focus-bind{margin-bottom:12px!important}
+  /* 动作竖排是为「在流里、行又窄」那个旧状态准备的。7.0 改成浮层之后
+     它不再占行宽，竖排只会让这一块变高、顶进工具条。留一行排。 */
+  .os-task-row{gap:9px}.os-focus-bind{margin-bottom:12px!important}
   .os-toolbar{padding:0 16px 14px}.os-knowledge-body{padding:0}.os-heat-layout{grid-template-columns:minmax(0,1fr)}
 }
 @container (max-width:800px) {
@@ -342,22 +437,30 @@
   .os-app{grid-template-columns:64px minmax(0,1fr)}.os-rail{padding:20px 8px 10px;gap:25px;align-items:center}
   .os-wordmark,.os-nav-label,.os-local,.os-nav-heading,.os-widgets-top,.os-widgets-bottom{display:none!important}.os-nav{width:100%}.os-nav-group+.os-nav-group{margin-top:8px;border-top:1px solid var(--os-line);padding-top:8px}.os-root .os-nav-button{padding:10px;justify-content:center}
   .os-rail-foot{width:100%}.os-root .os-rail-foot .os-button{font-size:10px;padding:6px 3px;min-height:42px}
-  .os-main{padding:18px 16px 8px;gap:14px}.os-today-grid{grid-template-columns:minmax(0,1fr) minmax(220px,.85fr);gap:12px}
+  .os-main{padding:18px 16px 8px;gap:14px}
+  /* 三栏折成两栏：专注独占左侧整列，要务和行动在右侧上下叠。
+     三栏在这个宽度下各剩 250px 出头，表盘和任务行都挤到没法读。 */
+  .os-today-grid{gap:12px;grid-template-columns:minmax(0,.95fr) minmax(0,1.05fr);
+    grid-template-rows:auto minmax(0,1fr);
+    grid-template-areas:"focus intent" "focus actions"}
   .os-heading h1{font-size:21px}.os-header-actions .os-quiet{display:none}.os-header{gap:8px}.os-panel-head h2{font-size:15px}
   .os-widgets-header{display:none!important}
-  .os-today-left,.os-today-right{gap:12px}.os-metrics{gap:18px}.os-focus .os-overline{letter-spacing:.5px;font-size:8px}
+  .os-today-col{gap:12px}.os-stat-tiles{gap:6px}.os-focus .os-overline{letter-spacing:.5px;font-size:8px}
   .os-knowledge-body{grid-template-columns:minmax(180px,.9fr) minmax(0,1fr)}.os-note-detail{padding:20px}
 }
 @container (max-width:650px) {
-  /* 窄屏多为触摸，没有 hover 态，动作常驻显示。 */
-  .os-row-actions{opacity:1}
+  /* 窄屏多为触摸，没有 hover 态，动作常驻显示——也就回到正常流里排，
+     不再浮在行上（浮起来会盖住本来就窄的标题）。 */
+  .os-row-actions{position:static;transform:none;background:none;padding-left:0;
+    opacity:1;pointer-events:auto}
   .os-root{--fs-display:20px;--fs-title:15px;--fs-body:12px;--fs-meta:10px;--fs-timer:60px}
 
   .os-main{padding:16px 12px 7px;gap:12px}.os-heading h1{font-size:19px}
   .os-header-actions button{font-size:10px!important;padding:7px!important}.os-content{gap:10px}
   .os-mobile-switch{display:flex!important;gap:8px;flex:none}.os-mobile-switch button{flex:1}
-  .os-today-grid{display:flex}.os-today-left,.os-today-right{width:100%;flex:1}
-  .os-mobile-actions .os-today-right,.os-mobile-focus .os-today-left{display:none}
+  .os-today-grid{display:flex;flex-direction:column}.os-today-col{width:100%;flex:1}
+  /* 「今日行动」那一档给要务和行动，「专注与阅读」那一档给专注栏。 */
+  .os-mobile-actions .is-focus,.os-mobile-focus .is-intent,.os-mobile-focus .is-actions{display:none}
   .os-intent{padding:15px}.os-metrics{justify-content:space-between}.os-metrics>div{flex-direction:row;align-items:baseline;gap:6px}
   .os-toolbar{gap:10px}.os-toolbar>.os-input{max-width:none;width:100%}.os-root .os-segments button{font-size:11px;padding:6px 8px}
   .os-panel-head{padding:14px}.os-panel-head .os-overline{font-size:8px;letter-spacing:.6px}.os-panel-body{padding-left:14px;padding-right:14px}
@@ -374,7 +477,7 @@
   .os-main{padding-top:14px;gap:12px}.os-rail{padding-top:16px;gap:20px}.os-nav{gap:3px}.os-root .os-nav-button{padding-top:10px;padding-bottom:10px}
   .os-intent{padding:13px 16px}.os-metrics strong{font-size:23px}.os-panel-head{padding-top:12px;padding-bottom:10px}
   .os-focus .os-panel-body{padding-top:0}.os-dial{width:min(46cqw,168px)}.os-root .os-focus-bind{margin:6px 0 8px}.os-beads{margin-bottom:10px}.os-modes{margin-bottom:9px}.os-resume{flex-basis:130px}
-  .os-today-left,.os-today-right{gap:12px}
+  .os-today-col{gap:12px}
 }
 @media(prefers-reduced-motion:reduce){.os-root *{transition:none!important;animation:none!important}}
 
@@ -412,8 +515,8 @@
   .os-root .os-nav-button {padding:6px 10px}
   .os-main {padding-top:6px;gap:6px}
   .os-heading h1 {font-size:17px}
-  .os-today-left,.os-today-right {overflow-y:auto;overscroll-behavior:contain}
-  .os-today-left>.os-grow,.os-today-right>.os-grow {flex:none;min-height:220px}
+  .os-today-col {overflow-y:auto;overscroll-behavior:contain}
+  .os-today-col>.os-grow {flex:none;min-height:220px}
   .os-resume {flex:none}
 }
 /* A document owns its H1; hide only Obsidian's duplicate display title.
@@ -452,8 +555,8 @@
 }
 @container (max-height:600px){
  .os-heading h1{font-size:17px}.os-page-status{display:none}
- .os-focus-widget{max-height:110px}.os-today-left,.os-today-right{overflow-y:auto;overscroll-behavior:contain}
- .os-today-left>.os-grow{flex:none;min-height:200px}
+ .os-focus-widget{max-height:110px}.os-today-col{overflow-y:auto;overscroll-behavior:contain}
+ .os-today-col>.os-grow{flex:none;min-height:200px}
 }
 
 /* Learning OS 5.0 */
@@ -571,7 +674,7 @@
 .os-root .os-sections .os-section:hover {background:var(--os-soft);color:var(--os-ink)}
 .os-root .os-sections .os-section.is-active {background:var(--os-soft);border-color:var(--os-line);color:var(--os-accent-2);font-weight:650}
 
-/* 6.8：统一玻璃表面。主面板之外的二级卡、表单与产品弹窗不再退回实色。 */
+/* 7.0：统一玻璃表面。主面板之外的二级卡、表单与产品弹窗不再退回实色。 */
 .os-root .os-input,
 .os-root select {
   background-color:var(--os-glass-field);

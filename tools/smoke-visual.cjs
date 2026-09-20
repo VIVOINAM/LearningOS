@@ -1,4 +1,5 @@
 const fs=require('node:fs'),path=require('node:path'),assert=require('node:assert/strict');
+const legibility=require('./legibility.cjs');
 const {chromium}=require(process.env.PLAYWRIGHT_PATH||'C:/Users/longf/.cache/codex-runtimes/codex-primary-runtime/dependencies/node/node_modules/playwright');
 const root=path.resolve(__dirname,'..'),out=path.resolve(process.env.VISUAL_OUTPUT_DIR||path.resolve(root,'../../workbench-checks/visual'));fs.mkdirSync(out,{recursive:true});
 (async()=>{
@@ -14,6 +15,7 @@ const root=path.resolve(__dirname,'..'),out=path.resolve(process.env.VISUAL_OUTP
  // 5.4：el / btn 已合并到 shared/dom.js，各模块的 require 桩都要能解析它。
  await page.addScriptTag({content:`window.domModule=(()=>{const module={exports:{}};${fs.readFileSync(path.join(root,'shared/dom.js'),'utf8')};return module.exports;})();`});
  await page.addScriptTag({content:`window.dateModule=(()=>{const module={exports:{}};${fs.readFileSync(path.join(root,'shared/date.js'),'utf8')};return module.exports;})();window.previewModel=(()=>{const module={exports:{}};const require=name=>{if(name==='../shared/date')return window.dateModule;throw Error('Unexpected fixture dependency: '+name);};${fs.readFileSync(path.join(root,'codex-workbench/console-model.js'),'utf8')};return module.exports;})();`});
+ await page.addScriptTag({content:`window.formulaModel=(()=>{const module={exports:{}};${fs.readFileSync(path.join(root,'codex-study/core/formula-model.js'),'utf8')};return module.exports;})();window.markdownModule={renderMarkdown(_app,_owner,target,markdown){target.textContent=markdown;target.classList.add('markdown-rendered');},markdownOwner(){return{load(){},unload(){}};}};`});
  await page.addScriptTag({content:`window.dueModule=(()=>{const module={exports:{}};const require=()=>({});${fs.readFileSync(path.join(root,'codex-workbench/due.js'),'utf8')};return module.exports;})();`});
  for(const [name,file]of [['budgetModule','budget.js'],['editorModule','action-editor.js']])await page.addScriptTag({content:`window.${name}=(()=>{const module={exports:{}};const require=n=>n.includes('shared/dom')?window.domModule:{};${fs.readFileSync(path.join(root,'codex-workbench',file),'utf8')};return module.exports;})();`});
  await page.addStyleTag({content:fs.readFileSync(path.join(root,'codex-capture/styles.css'),'utf8')});
@@ -41,8 +43,8 @@ const root=path.resolve(__dirname,'..'),out=path.resolve(process.env.VISUAL_OUTP
  // 只是静悄悄地不存在。
  // 挂件走的是真正的 main.js，只把 Plugin 外壳和 requestUrl 换成桩：左栏要验的是
  // 「挂件把那段空白填上之后，底部按钮还在不在视口里」，验一份抄写版等于没验。
- await page.addScriptTag({content:`window.CodexWidgets=(()=>{const module={exports:{}};const require=n=>n==='obsidian'?{Plugin:class{async loadData(){return window.widgetData||null}async saveData(d){window.widgetData=d}addCommand(){}registerInterval(){}},Modal:window.FixtureModal,Notice:class{constructor(t){window.lastNotice=t}},requestUrl:async()=>({json:{current:{temperature_2m:17.4,weather_code:2}}}),setIcon(e,name){const svg=document.createElementNS("http://www.w3.org/2000/svg","svg");svg.setAttribute("data-icon",name);e.append(svg);}}:n.includes('shared/dom')?window.domModule:n.includes('shared/date')?window.dateModule:window.widgetCore;${fs.readFileSync(path.join(root,'codex-widgets/main.js'),'utf8')};return module.exports;})();`});
- await page.addScriptTag({content:`window.ConsoleView=(()=>{const module={exports:{}};const require=name=>name.includes('shared/dom')?window.domModule:name.includes('console-model')?window.previewModel:name.includes('due')?window.dueModule:name.includes('detail-modal')?window.detailModalModule:name.includes('action-editor')?window.editorModule:name.includes('budget')?window.budgetModule:{ItemView:class{constructor(){this.contentEl=document.querySelector('.view-content')}registerEvent(){}},Notice:class{constructor(t){window.lastNotice=t}},Modal:window.FixtureModal,setIcon(e,name){e.textContent=({sun:'☀','check-square':'✓','book-open':'▤',flame:'♨',files:'▱','rotate-ccw':'↶'})[name]||'○'}};${fs.readFileSync(path.join(root,'codex-workbench/console-view.js'),'utf8')};return module.exports.ConsoleView;})();`});
+ await page.addScriptTag({content:`window.CodexWidgets=(()=>{const module={exports:{}};const require=n=>n==='obsidian'?{Plugin:class{async loadData(){return window.widgetData||null}async saveData(d){window.widgetData=d}addCommand(){}registerInterval(){}registerDomEvent(t,e,fn){t.addEventListener(e,fn)}},Modal:window.FixtureModal,Notice:class{constructor(t){window.lastNotice=t}},requestUrl:async()=>({json:{current:{temperature_2m:17.4,weather_code:2}}}),setIcon(e,name){const svg=document.createElementNS("http://www.w3.org/2000/svg","svg");svg.setAttribute("data-icon",name);e.append(svg);}}:n.includes('shared/dom')?window.domModule:n.includes('shared/date')?window.dateModule:window.widgetCore;${fs.readFileSync(path.join(root,'codex-widgets/main.js'),'utf8')};return module.exports;})();`});
+ await page.addScriptTag({content:`window.ConsoleView=(()=>{const module={exports:{}};const require=name=>name.includes('shared/dom')?window.domModule:name.includes('console-model')?window.previewModel:name.includes('formula-model')?window.formulaModel:name.includes('markdown-render')?window.markdownModule:name.includes('due')?window.dueModule:name.includes('detail-modal')?window.detailModalModule:name.includes('action-editor')?window.editorModule:name.includes('budget')?window.budgetModule:{ItemView:class{constructor(){this.contentEl=document.querySelector('.view-content')}registerEvent(){}},Notice:class{constructor(t){window.lastNotice=t}},Modal:window.FixtureModal,setIcon(e,name){e.textContent=({sun:'☀','check-square':'✓','book-open':'▤',flame:'♨',files:'▱','rotate-ccw':'↶'})[name]||'○'}};${fs.readFileSync(path.join(root,'codex-workbench/console-view.js'),'utf8')};return module.exports.ConsoleView;})();`});
  const courses=JSON.parse(fs.readFileSync(path.join(root,'codex-workbench/main.js'),'utf8').match(/const COURSES = (\[.*\]);/)[1]);
  await page.evaluate(async courses=>{
    const day=previewModel.dayKey();
@@ -67,7 +69,7 @@ const root=path.resolve(__dirname,'..'),out=path.resolve(process.env.VISUAL_OUTP
    };
    owners['codex-study']={engine:p.study,manifest:{version:'3.6.0'}};owners['codex-workbench']=p;
    // 四个挂件全开，倒计日给两条：满配下左栏最挤，底部按钮最容易被顶出去。
-   window.widgetData={order:[{id:'clock',on:true,slot:'top'},{id:'quote',on:true,slot:'bottom'},{id:'countdown',on:true,slot:'bottom'},{id:'weather',on:true,slot:'header'}],clock:{hour12:true,seconds:true,date:true},countdown:{items:[{name:'期末考',date:'2027-01-05'},{name:'开题报告',date:'2026-12-01'}],max:3},weather:{lat:45.46,lon:9.19,place:'米兰',refreshMinutes:60}};
+   window.widgetData={order:[{id:'clock',on:true,slot:'top'},{id:'quote',on:true,slot:'bottom'},{id:'countdown',on:true,slot:'bottom'},{id:'weather',on:true,slot:'header'}],clock:{seconds:true,date:true},countdown:{items:[{name:'期末考',date:'2027-01-05'},{name:'开题报告',date:'2026-12-01'}],max:3},weather:{lat:45.46,lon:9.19,place:'米兰',refreshMinutes:60}};
    window.widgets=new CodexWidgets();await window.widgets.onload();owners['codex-widgets']=window.widgets;
    p.dailyAudit=async()=>({seconds:1500,switches:1,interruptions:1,projects:{'02 项目/数学学习.md':900,'独立任务 / 临时杂项':600},done:[],pending:tasks.slice(0,3),outputs:files.slice(0,2)});p.daily=async()=>({path:'05 日记/'+day+'.md'});p.saveDailyFeedback=async()=>{};p.setTomorrow=async()=>{};p.rolloverDaily=async()=>{};files.push({path:'02 项目/本周学习计划.md',basename:'本周学习计划',extension:'md',stat:{mtime:1}});capture.app=p.app;capture.captureTask=options=>new TaskModal(capture,options).open();capture.createTask=async value=>{if(window.failCreate)throw Error('模拟保存失败');window.createdTask=value;};p.captureTask=()=>capture.captureTask();window.v=new ConsoleView({},p);window.fixtureTasks=tasks;await v.onOpen();
  },courses);
@@ -113,7 +115,12 @@ const root=path.resolve(__dirname,'..'),out=path.resolve(process.env.VISUAL_OUTP
       const acts=[...document.querySelectorAll('.os-header-actions button')].map(e=>e.getBoundingClientRect());
       const rows=new Set([...h.querySelectorAll('.ow-card')].map(c=>Math.round(c.getBoundingClientRect().top)));
       return {cards:h.querySelectorAll('.ow-card').length,rows:rows.size,
-              icon:!!h.querySelector('.ow-inline-icon svg'),
+              // 7.0：自绘图标。不只断言「有个 svg」——空的 svg 也是 svg，
+              // 而幕画不出来时正好就是那样。要求它真画了形，并且落在已知的十幕里。
+              icon:(()=>{const a=h.querySelector('.ow-art');
+                return !!a&&a.childElementCount>0&&/ow-art-is-[a-z-]+/.test(a.getAttribute('class')||'');})(),
+              // 读数块：温度当主，天气和地名退成底下一行小字。
+              read:!!h.querySelector('.ow-wx-temp')&&!!h.querySelector('.ow-wx-meta'),
               inHeader:r.left>=b.left-1&&r.right<=b.right+1&&r.top>=b.top-1&&r.bottom<=b.bottom+1,
               actionsInHeader:acts.every(a=>a.right<=b.right+1&&a.left>=b.left-1),
               overlaps:acts.some(a=>a.left<r.right-1&&a.right>r.left+1)};
@@ -121,7 +128,8 @@ const root=path.resolve(__dirname,'..'),out=path.resolve(process.env.VISUAL_OUTP
     if(head){
       assert.equal(head.cards,1,`页头应当只有天气一块：${JSON.stringify({width,height,head})}`);
       assert.equal(head.rows,1,`页头挂件换行了：${JSON.stringify({width,height,head})}`);
-      assert.ok(head.icon,`页头天气没画出字形：${JSON.stringify({width,height})}`);
+      assert.ok(head.icon,`页头天气没画出图标，或画出来是个空 svg：${JSON.stringify({width,height})}`);
+      assert.ok(head.read,`页头天气不是读数块（缺温度或缺元信息）：${JSON.stringify({width,height})}`);
       assert.ok(head.inHeader,`页头挂件超出页头范围：${JSON.stringify({width,height,head})}`);
       assert.ok(head.actionsInHeader,`页头挂件把右上角按钮挤出了页头：${JSON.stringify({width,height,head})}`);
       assert.ok(!head.overlaps,`页头挂件和右上角按钮重叠：${JSON.stringify({width,height,head})}`);
@@ -196,6 +204,40 @@ const root=path.resolve(__dirname,'..'),out=path.resolve(process.env.VISUAL_OUTP
     if(theme==='light'&&width===420&&tab==='today')await page.screenshot({path:path.join(out,'today-mobile.png')});
    }
   }
+ }
+ // ---- 闸门四：对抗性背景。量的是真正挂载的界面，不是示意结构。 ----
+ // 前三道闸门管令牌和构图，管不到「一张没见过的照片」。这一道把界面摆在
+ // 八种最坏背景上（含「没挂壁纸」那条路径），在文字锚点处采样它真正压着的
+ // 合成底色。--os-scrim-opacity 强制设成 0，也就是用户把图片可见度滑到 100
+ // 的最坏情况——托底层不跟那个滑块走，这里量的正是「滑到底之后还剩什么」。
+ await page.setViewportSize({width:1600,height:900});
+ await page.evaluate(()=>v.setTab('today'));
+ {
+  const rows=await legibility.measure(page);
+  const {bad,worst}=legibility.report(rows);
+  if(bad.length){
+   const lines=bad.slice(0,20).map(r=>`  ${r.theme==='light'?'浅':'深'} / ${r.backdrop} / ${r.name}（${r.on}）`
+     +` 底 ${r.bg} 字 ${r.ink} = ${r.value.toFixed(2)}`).join('\n');
+   assert.fail(`可读性闸门：${rows.length} 次取样里 ${bad.length} 处低于 ${legibility.MIN}\n${lines}`);
+  }
+  console.log(`可读性：${rows.length} 次取样全部达标，最难的一处 `
+    +`${worst.theme==='light'?'浅':'深'} / ${worst.backdrop} / ${worst.name} = ${worst.value.toFixed(2)}`);
+  // 留两张壁纸下的截图。其余截图都在平色底上拍的，而这一版改的东西
+  // 只有在照片上才看得出来——没有它，评审时只能看数字。
+  for(const [theme,file] of [['','today-wallpaper.png'],['theme-dark ','today-wallpaper-dark.png']]){
+   await page.evaluate(t=>{
+    document.documentElement.style.setProperty('--os-scrim-opacity','0');   // 滑块滑到底
+    document.body.style.setProperty('--os-wallpaper',
+      'linear-gradient(#045295 0%,#8fc7ee 60%,#dff1ff 100%)');
+    document.body.className=t+'os-wallpaper-on';
+   },theme);
+   await page.waitForTimeout(120);
+   await page.screenshot({path:path.join(out,file)});
+  }
+  await page.evaluate(()=>{
+   document.body.style.removeProperty('--os-wallpaper');
+   document.documentElement.style.removeProperty('--os-scrim-opacity');
+  });
  }
  await page.evaluate(()=>document.body.className='');await page.setViewportSize({width:1100,height:720});await page.evaluate(()=>v.setTab('tasks'));
  await page.getByPlaceholder('搜索任务或来源笔记').fill('伯努利');await page.waitForTimeout(200);
@@ -356,10 +398,24 @@ const root=path.resolve(__dirname,'..'),out=path.resolve(process.env.VISUAL_OUTP
    });
    assert.equal(churn.hits,0,`状态没变的三次 tick 改动了 DOM ${churn.hits} 次：${churn.seen.join(', ')}`);
  }
- await page.setViewportSize({width:420,height:720});await page.getByRole('button',{name:'专注与阅读',exact:true}).click();assert.equal(await page.locator('.os-today-right').isVisible(),true);assert.equal(await page.locator('.os-today-left').isVisible(),false);
+ // 7.0 三栏之后窄屏的分档没变，但三栏各归哪一档要逐栏验：
+ // 「专注与阅读」只留专注栏，「今日行动」留要务栏和行动栏。
+ await page.setViewportSize({width:420,height:720});await page.getByRole('button',{name:'专注与阅读',exact:true}).click();
+ assert.equal(await page.locator('.os-today-col.is-focus').isVisible(),true,'专注与阅读档应显示专注栏');
+ assert.equal(await page.locator('.os-today-col.is-intent').isVisible(),false,'专注与阅读档不该显示今日要务');
+ assert.equal(await page.locator('.os-today-col.is-actions').isVisible(),false,'专注与阅读档不该显示下一步行动');
+ await page.getByRole('button',{name:'今日行动',exact:true}).click();
+ assert.equal(await page.locator('.os-today-col.is-focus').isVisible(),false,'今日行动档不该显示专注栏');
+ assert.equal(await page.locator('.os-today-col.is-intent').isVisible(),true,'今日行动档应显示今日要务');
+ assert.equal(await page.locator('.os-today-col.is-actions').isVisible(),true,'今日行动档应显示下一步行动');
+ await page.getByRole('button',{name:'专注与阅读',exact:true}).click();
  await page.setViewportSize({width:1100,height:720});await page.evaluate(()=>v.setTab('tasks'));
+ // 7.0：动作收起时 pointer-events 也关掉——看不见的东西不该能点。
+ // 所以要先把鼠标移到行上，和真人的操作顺序一致。
+ await page.locator('.os-task-row').first().hover();
  await page.locator('.os-row-actions').first().getByRole('button',{name:'删除',exact:true}).click();
  await page.getByRole('button',{name:'已删除',exact:true}).click();assert.equal(await page.locator('.os-task-row').count(),1);
+ await page.locator('.os-task-row').first().hover();
  await page.getByRole('button',{name:'恢复',exact:true}).click();assert.equal(await page.locator('.os-task-row').count(),0);
  await page.evaluate(()=>v.setTab('knowledge'));await page.getByRole('button',{name:'新建笔记',exact:true}).click();assert.equal(await page.evaluate(()=>window.noteCreated),true);
  await page.locator('.os-note-row').first().click();await page.getByRole('button',{name:'标记完成',exact:true}).click();assert.equal(await page.evaluate(()=>window.noteAction),'done');
@@ -374,15 +430,24 @@ const root=path.resolve(__dirname,'..'),out=path.resolve(process.env.VISUAL_OUTP
   // 等浮现走完：6.6 把这条过渡从 120ms 拉到 220ms 并统一了缓动，
   // 200ms 时量到的是 0.999——不是没显现，是还差最后一点。
   assert.equal(await actions.evaluate(e=>getComputedStyle(e).opacity),'0','动作应默认收起');
+  // 7.0：收起时不占行宽，也不接收点击。前者是这次三栏布局的前提——
+  // 原来 flex:none + opacity:0 让它在 495px 的行里永久占着 286px，
+  // 任务标题只剩 164px，折行、药丸被截。
+  assert.equal(await actions.evaluate(e=>getComputedStyle(e).position),'absolute','收起的动作不许占行宽');
+  assert.equal(await actions.evaluate(e=>getComputedStyle(e).pointerEvents),'none','收起的动作不许能点');
+  const mainWide=await firstRow.locator('.os-row-main').evaluate(e=>e.getBoundingClientRect().width);
+  const rowWide=await firstRow.evaluate(e=>e.getBoundingClientRect().width);
+  assert.ok(mainWide>rowWide*0.7,`任务标题应占行宽的大半，实测 ${Math.round(mainWide)}/${Math.round(rowWide)}`);
   await firstRow.hover();await page.waitForTimeout(400);
   assert.equal(await actions.evaluate(e=>getComputedStyle(e).opacity),'1','悬停后动作应显现');
+  assert.equal(await actions.evaluate(e=>getComputedStyle(e).pointerEvents),'auto','悬停后动作要能点');
   const reachable=await actions.evaluate(e=>[...e.querySelectorAll('button')].every(b=>b.offsetParent!==null&&getComputedStyle(b).visibility!=='hidden'));
   assert.ok(reachable,'动作按钮不得移出 Tab 顺序');
   await page.mouse.move(0,0);await page.waitForTimeout(400);
   await firstRow.locator('.os-row-actions button').first().focus();await page.waitForTimeout(400);
   assert.equal(await actions.evaluate(e=>getComputedStyle(e).opacity),'1','键盘聚焦时动作应显现');
  }
-await firstRow.getByRole('button',{name:'补充详情'}).click();
+await firstRow.hover();await page.waitForTimeout(300);await firstRow.getByRole('button',{name:'补充详情'}).click();
  await page.locator('.os-detail-modal').waitFor();
  await page.getByLabel('下一步',{exact:true}).fill('在行动页完成推导');await page.getByLabel('下一步',{exact:true}).press('Tab');await page.waitForTimeout(60);
  assert.equal(await page.evaluate(()=>fixtureTasks[0].next_action),'在行动页完成推导');assert.equal(await page.evaluate(()=>v.tab),'tasks');
@@ -420,7 +485,7 @@ await firstRow.getByRole('button',{name:'补充详情'}).click();
  await page.locator('.os-detail-modal').waitFor({state:'detached'});
  // 子任务多到放不下时：弹窗封顶在上限，只有子任务列表自己滚，字段仍然全部可见。
  await page.evaluate(()=>{fixtureTasks[0].checklist=Array.from({length:24},(_,i)=>({text:'子任务 '+(i+1)+' · 验证长清单时的滚动边界',done:i%3===0}));});
- await firstRow.getByRole('button',{name:'补充详情'}).click();await page.locator('.os-detail-modal').waitFor();
+ await firstRow.hover();await firstRow.getByRole('button',{name:'补充详情'}).click();await page.locator('.os-detail-modal').waitFor();
  const long=await page.locator('.os-detail-modal').evaluate(root=>{
    const b=root.getBoundingClientRect(),list=root.querySelector('.os-detail-list');
    const parts=[...root.querySelectorAll('.os-editor-field,.os-detail-actions button')]
@@ -436,7 +501,7 @@ await firstRow.getByRole('button',{name:'补充详情'}).click();
  await page.locator('.os-detail-modal').getByRole('button',{name:'完成',exact:true}).click();
  await page.locator('.os-detail-modal').waitFor({state:'detached'});
  await page.evaluate(()=>{delete fixtureTasks[0].checklist;});
- await firstRow.getByRole('button',{name:'设为今日要务'}).click();assert.equal(await firstRow.getAttribute('data-focus'),'true');
+ await firstRow.hover();await firstRow.getByRole('button',{name:'设为今日要务'}).click();assert.equal(await firstRow.getAttribute('data-focus'),'true');
  await page.evaluate(()=>v.setTab('projects'));
  await page.getByRole('button',{name:'新建 / 管理项目',exact:true}).click();await page.getByPlaceholder('新项目名称',{exact:true}).fill('内联测试项目');await page.getByRole('button',{name:'创建项目',exact:true}).click();
  await page.getByLabel('项目下一步',{exact:true}).fill('在行动页补充项目');await page.getByLabel('项目下一步',{exact:true}).press('Tab');await page.waitForTimeout(60);
@@ -488,6 +553,25 @@ await firstRow.getByRole('button',{name:'补充详情'}).click();
  // 这里量的是每个输入框在不在弹窗可见框内，而不是弹窗自己 scrollWidth 有没有变，
  // 后者会被 overflow-x:hidden 裁掉，量不出来。
  await page.evaluate(()=>v.setTab('today'));
+ {
+  await page.setViewportSize({width:1100,height:720});await page.waitForTimeout(80);
+  const fit=await page.evaluate(()=>{
+   const stats=document.querySelector('.os-stats .os-panel-body'),scratch=document.querySelector('.os-scratchpad .os-panel-body');
+   return {stats:[stats.clientHeight,stats.scrollHeight],scratch:[scratch.clientHeight,scratch.scrollHeight]};
+  });
+  assert.ok(fit.stats[1]<=fit.stats[0]+1,'统计卡不应出现模块内滚动：'+JSON.stringify(fit));
+  assert.ok(fit.scratch[1]<=fit.scratch[0]+1,'闪念卡外层不应出现模块内滚动：'+JSON.stringify(fit));
+  const scratch=page.getByLabel('快捷闪念草稿',{exact:true});
+  await scratch.fill(String.raw`动量 \( p=mv \)`);await page.waitForTimeout(360);
+  assert.equal(await page.locator('.os-scratchpad-preview').textContent(),'动量 $p=mv$','闪念预览应转换 LaTeX 定界符');
+  assert.equal(await page.evaluate(()=>v.plugin.data.quickNotesDraft),String.raw`动量 \( p=mv \)`,'草稿应自动写入工作台数据');
+  const columns=await page.evaluate(()=>({scratch:document.querySelector('.os-scratchpad').parentElement.className,stats:document.querySelector('.os-stats').parentElement.className}));
+  assert.equal(columns.scratch,columns.stats,'快捷闪念必须和统计数据在同一中间栏');
+  await page.getByLabel('清空快捷闪念草稿',{exact:true}).click();
+  assert.equal(await scratch.inputValue(),'','清空后输入框应为空');
+  assert.equal(await page.evaluate(()=>v.plugin.data.quickNotesDraft),'','清空后持久化草稿也应为空');
+  await page.screenshot({path:path.join(out,'scratchpad-middle.png')});
+ }
  await page.getByRole('button',{name:'侧栏挂件设置',exact:true}).click();
  await page.locator('.ow-settings').waitFor();
  assert.equal(await page.locator('.ow-order-row').count(),4,'四个挂件都应出现在排序列表里');
