@@ -11,10 +11,15 @@ const root=path.resolve(__dirname,'..'),out=path.resolve(process.env.VISUAL_OUTP
  // 必须自己按同样顺序补上，否则渲染出来的是一套没有任何 --os-* 的界面——
  // 字号、留白、描边全落到浏览器默认值，断言等于在测另一个东西。
  await page.addStyleTag({content:fs.readFileSync(path.join(root,'shared/tokens.css'),'utf8')});
+ await page.addStyleTag({content:fs.readFileSync(path.join(root,'shared/components.css'),'utf8')});
  await page.addStyleTag({content:fs.readFileSync(path.join(root,'codex-workbench/styles.css'),'utf8')});
  // 5.4：el / btn 已合并到 shared/dom.js，各模块的 require 桩都要能解析它。
  await page.addScriptTag({content:`window.domModule=(()=>{const module={exports:{}};${fs.readFileSync(path.join(root,'shared/dom.js'),'utf8')};return module.exports;})();`});
  await page.addScriptTag({content:`window.dateModule=(()=>{const module={exports:{}};${fs.readFileSync(path.join(root,'shared/date.js'),'utf8')};return module.exports;})();window.previewModel=(()=>{const module={exports:{}};const require=name=>{if(name==='../shared/date')return window.dateModule;throw Error('Unexpected fixture dependency: '+name);};${fs.readFileSync(path.join(root,'codex-workbench/console-model.js'),'utf8')};return module.exports;})();`});
+ // 课表模型是纯函数，没有依赖。喂它仓库里那篇真的课表笔记，而不是手写一份：
+ // 笔记改了格式、解析跟不上，这里第一个知道。
+ await page.addScriptTag({content:`window.timetableModel=(()=>{const module={exports:{}};${fs.readFileSync(path.join(root,'codex-workbench/timetable-model.js'),'utf8')};return module.exports;})();`});
+ await page.evaluate(text=>{window.timetableData={path:'00 工作台/Polimi 2026-27 第一学期课表.md',...timetableModel.parseTimetable(text)};},fs.readFileSync(path.join(root,'../00 工作台/Polimi 2026-27 第一学期课表.md'),'utf8'));
  await page.addScriptTag({content:`window.formulaModel=(()=>{const module={exports:{}};${fs.readFileSync(path.join(root,'codex-study/core/formula-model.js'),'utf8')};return module.exports;})();window.markdownModule={renderMarkdown(_app,_owner,target,markdown){target.textContent=markdown;target.classList.add('markdown-rendered');},markdownOwner(){return{load(){},unload(){}};}};`});
  await page.addScriptTag({content:`window.dueModule=(()=>{const module={exports:{}};const require=()=>({});${fs.readFileSync(path.join(root,'codex-workbench/due.js'),'utf8')};return module.exports;})();`});
  for(const [name,file]of [['budgetModule','budget.js'],['editorModule','action-editor.js']])await page.addScriptTag({content:`window.${name}=(()=>{const module={exports:{}};const require=n=>n.includes('shared/dom')?window.domModule:{};${fs.readFileSync(path.join(root,'codex-workbench',file),'utf8')};return module.exports;})();`});
@@ -44,7 +49,8 @@ const root=path.resolve(__dirname,'..'),out=path.resolve(process.env.VISUAL_OUTP
  // 挂件走的是真正的 main.js，只把 Plugin 外壳和 requestUrl 换成桩：左栏要验的是
  // 「挂件把那段空白填上之后，底部按钮还在不在视口里」，验一份抄写版等于没验。
  await page.addScriptTag({content:`window.CodexWidgets=(()=>{const module={exports:{}};const require=n=>n==='obsidian'?{Plugin:class{async loadData(){return window.widgetData||null}async saveData(d){window.widgetData=d}addCommand(){}registerInterval(){}registerDomEvent(t,e,fn){t.addEventListener(e,fn)}},Modal:window.FixtureModal,Notice:class{constructor(t){window.lastNotice=t}},requestUrl:async()=>({json:{current:{temperature_2m:17.4,weather_code:2}}}),setIcon(e,name){const svg=document.createElementNS("http://www.w3.org/2000/svg","svg");svg.setAttribute("data-icon",name);e.append(svg);}}:n.includes('shared/dom')?window.domModule:n.includes('shared/date')?window.dateModule:window.widgetCore;${fs.readFileSync(path.join(root,'codex-widgets/main.js'),'utf8')};return module.exports;})();`});
- await page.addScriptTag({content:`window.ConsoleView=(()=>{const module={exports:{}};const require=name=>name.includes('shared/dom')?window.domModule:name.includes('console-model')?window.previewModel:name.includes('formula-model')?window.formulaModel:name.includes('markdown-render')?window.markdownModule:name.includes('due')?window.dueModule:name.includes('detail-modal')?window.detailModalModule:name.includes('action-editor')?window.editorModule:name.includes('budget')?window.budgetModule:{ItemView:class{constructor(){this.contentEl=document.querySelector('.view-content')}registerEvent(){}},Notice:class{constructor(t){window.lastNotice=t}},Modal:window.FixtureModal,setIcon(e,name){e.textContent=({sun:'☀','check-square':'✓','book-open':'▤',flame:'♨',files:'▱','rotate-ccw':'↶'})[name]||'○'}};${fs.readFileSync(path.join(root,'codex-workbench/console-view.js'),'utf8')};return module.exports.ConsoleView;})();`});
+ for(const [name,file] of [['summaryModel','summary-notes.js'],['summaryView','summary-view.js']])await page.addScriptTag({content:`window.${name}=(()=>{const module={exports:{}};const require=n=>n.includes('shared/dom')?window.domModule:n.includes('summary-notes')?window.summaryModel:n.includes('markdown-render')?window.markdownModule:{Notice:class{}};${fs.readFileSync(path.join(root,'codex-workbench',file),'utf8')};return module.exports;})();`});
+ await page.addScriptTag({content:`window.ConsoleView=(()=>{const module={exports:{}};const require=name=>name.includes('timetable-model')?window.timetableModel:name.includes('shared/dom')?window.domModule:name.includes('summary-view')?window.summaryView:name.includes('console-model')?window.previewModel:name.includes('formula-model')?window.formulaModel:name.includes('markdown-render')?window.markdownModule:name.includes('due')?window.dueModule:name.includes('detail-modal')?window.detailModalModule:name.includes('action-editor')?window.editorModule:name.includes('budget')?window.budgetModule:{ItemView:class{constructor(){this.contentEl=document.querySelector('.view-content')}registerEvent(){}},Notice:class{constructor(t){window.lastNotice=t}},Modal:window.FixtureModal,setIcon(e,name){e.textContent=({sun:'☀','check-square':'✓','book-open':'▤',flame:'♨',files:'▱','rotate-ccw':'↶'})[name]||'○'}};${fs.readFileSync(path.join(root,'codex-workbench/console-view.js'),'utf8')};return module.exports.ConsoleView;})();`});
  const courses=JSON.parse(fs.readFileSync(path.join(root,'codex-workbench/main.js'),'utf8').match(/const COURSES = (\[.*\]);/)[1]);
  await page.evaluate(async courses=>{
    const day=previewModel.dayKey();
@@ -65,7 +71,7 @@ const root=path.resolve(__dirname,'..'),out=path.resolve(process.env.VISUAL_OUTP
     minutes:()=>timer.phase==='focus'?p.data.focusMinutes:p.data.breakMinutes,timerCore:{remaining:t=>t.remaining},
     toggle:async task=>{timer.task=task;timer.status=timer.status==='running'?'paused':'running';},stop:async()=>{timer.status='idle';},setPhase:async phase=>timer.phase=phase,
     updatePriority:async value=>{p.data.priorities[day]=value;},startPlan:async t=>{timer.task=t.text;timer.status='running';},
-    courseCatalog:()=>courses,courseStateFor:c=>({next:c.id==='052475'?'第三章 · 完成全微分与复合函数求导练习':'整理本周课堂笔记，完成配套习题',exam:'2026-12-22'}),courseBooksFor:()=>[files.at(-1).path],courseStatsFor:()=>({minutes:50,questions:1}),startCourse:async()=>{},openCourse:async()=>{},configureCourse:()=>{},openTextbook:async f=>{window.openedPath=f.path;},openLastTextbook:async()=>{},
+    courseCatalog:()=>courses,timetable:async()=>window.timetableData,courseStateFor:c=>({next:c.id==='052475'?'第三章 · 完成全微分与复合函数求导练习':'整理本周课堂笔记，完成配套习题',exam:'2026-12-22'}),courseBooksFor:()=>[files.at(-1).path],courseStatsFor:()=>({minutes:50,questions:1}),startCourse:async()=>{},openCourse:async()=>{},openClassNote:async c=>{window.openedClassNote=c.title;},configureCourse:()=>{},openTextbook:async f=>{window.openedPath=f.path;},openLastTextbook:async()=>{},
    };
    owners['codex-study']={engine:p.study,manifest:{version:'3.6.0'}};owners['codex-workbench']=p;
    // 四个挂件全开，倒计日给两条：满配下左栏最挤，底部按钮最容易被顶出去。
@@ -73,6 +79,7 @@ const root=path.resolve(__dirname,'..'),out=path.resolve(process.env.VISUAL_OUTP
    window.widgets=new CodexWidgets();await window.widgets.onload();owners['codex-widgets']=window.widgets;
    p.dailyAudit=async()=>({seconds:1500,switches:1,interruptions:1,projects:{'02 项目/数学学习.md':900,'独立任务 / 临时杂项':600},done:[],pending:tasks.slice(0,3),outputs:files.slice(0,2)});p.daily=async()=>({path:'05 日记/'+day+'.md'});p.saveDailyFeedback=async()=>{};p.setTomorrow=async()=>{};p.rolloverDaily=async()=>{};files.push({path:'02 项目/本周学习计划.md',basename:'本周学习计划',extension:'md',stat:{mtime:1}});capture.app=p.app;capture.captureTask=options=>new TaskModal(capture,options).open();capture.createTask=async value=>{if(window.failCreate)throw Error('模拟保存失败');window.createdTask=value;};p.captureTask=()=>capture.captureTask();window.v=new ConsoleView({},p);window.fixtureTasks=tasks;await v.onOpen();
  },courses);
+ await require('./summary-visual.cjs')(page,out);
  const results=[];
  for(const theme of ['light','dark']){
   await page.evaluate(t=>document.body.className=t==='dark'?'theme-dark':'',theme);
@@ -135,7 +142,8 @@ const root=path.resolve(__dirname,'..'),out=path.resolve(process.env.VISUAL_OUTP
       assert.ok(!head.overlaps,`页头挂件和右上角按钮重叠：${JSON.stringify({width,height,head})}`);
     } else assert.ok(width<=800,`页头挂件不该在 ${width}x${height} 下消失`);
    }
-    assert.equal(rail.buttons,5,`导航项数异常：${rail.buttons}`);
+    // 7.0 加了第六项「课表」。数字写死是故意的：导航多一项少一项都该有人看见。
+    assert.equal(rail.buttons,7,`导航项数异常：${rail.buttons}`);
     // 6.4：挂件区接管了导航和底部按钮之间的空档。它 flex-basis 为 0 且自带滚动，
     // 所以「挤不出底部按钮」这条不是自动成立的——宽松尺寸下四块全画得出，窄/矮时整块收起。
     if(rail.widgets){
@@ -158,7 +166,7 @@ const root=path.resolve(__dirname,'..'),out=path.resolve(process.env.VISUAL_OUTP
     if(height>=700&&width>=1100)assert.ok(!rail.navScrolls,`${width}x${height} 下导航区不应滚动`);
    }
    // 5.3：十个去处全部是顶层导航，学习与回顾不再有页内分段。
-   for(const tab of ['today','tasks','projects','courses','books','questions','knowledge','daily','heatmap','recall']){
+   for(const tab of ['today','tasks','projects','courses','books','questions','knowledge','daily','heatmap','recall','schedule']){
     await page.evaluate(tab=>v.setTab(tab),tab);await page.waitForTimeout(60);
     const result=await page.evaluate(tab=>{
       const bounded=['.os-root','.os-app','.os-main','.os-content','.os-today-grid','.os-audit-board'];
@@ -222,6 +230,60 @@ const root=path.resolve(__dirname,'..'),out=path.resolve(process.env.VISUAL_OUTP
   }
   console.log(`可读性：${rows.length} 次取样全部达标，最难的一处 `
     +`${worst.theme==='light'?'浅':'深'} / ${worst.backdrop} / ${worst.name} = ${worst.value.toFixed(2)}`);
+  // 课表页单独量一趟：它的文字大多压在实色课块上，不在玻璃上，
+  // 「照理不受壁纸影响」得量出来才算数。
+  await page.evaluate(()=>v.setTab('schedule'));await page.waitForTimeout(80);
+  {
+   const rows=await legibility.measure(page,{anchors:legibility.SCHEDULE_ANCHORS,minAnchors:7});
+   const {bad,worst}=legibility.report(rows);
+   if(bad.length)assert.fail(`可读性闸门（课表）：${rows.length} 次取样里 ${bad.length} 处低于 ${legibility.MIN}\n`
+     +bad.slice(0,20).map(r=>`  ${r.theme==='light'?'浅':'深'} / ${r.backdrop} / ${r.name}（${r.on}） 底 ${r.bg} 字 ${r.ink} = ${r.value.toFixed(2)}`).join('\n'));
+   console.log(`可读性（课表）：${rows.length} 次取样全部达标，最难的一处 ${worst.theme==='light'?'浅':'深'} / ${worst.backdrop} / ${worst.name} = ${worst.value.toFixed(2)}`);
+   for(const [theme,file] of [['','schedule-wallpaper.png'],['theme-dark ','schedule-wallpaper-dark.png']]){
+    await page.evaluate(t=>{document.documentElement.style.setProperty('--os-scrim-opacity','0');document.body.style.setProperty('--os-wallpaper','linear-gradient(#045295 0%,#8fc7ee 60%,#dff1ff 100%)');document.body.className=t+'os-wallpaper-on';},theme);
+    await page.waitForTimeout(120);await page.screenshot({path:path.join(out,file)});
+   }
+   await page.evaluate(()=>{document.body.style.removeProperty('--os-wallpaper');document.documentElement.style.removeProperty('--os-scrim-opacity');document.body.className='';});
+  }
+  // 课表交互：点一节 → 右上卡换成那一节、只它一块高亮；再点一次换回「下一节 / 正在上」。
+  // 翻周改的是页头那行周次；「本周」回来。选中态不许靠重建整页实现（会闪），所以断言块还是原来那个节点。
+  {
+   const first=page.locator('.os-class').first();
+   const title=await first.locator('.os-class-title').textContent();
+   const node=await first.evaluateHandle(e=>e);
+   await first.click();
+   assert.equal(await page.locator('.os-class.is-selected').count(),1);
+   assert.equal(await page.locator('.os-class-focus .os-panel-head h2').textContent(),title);
+   assert.match(await page.locator('.os-class-focus .os-overline').textContent(),/所选时段/);
+   assert.equal(await node.evaluate(e=>e.isConnected),true,'选中一节不该重建整张网格');
+   await first.click();
+   assert.equal(await page.locator('.os-class.is-selected').count(),0);
+   assert.doesNotMatch(await page.locator('.os-class-focus .os-overline').textContent(),/所选时段/);
+   const before=await page.locator('.os-page-status').textContent();
+   await page.getByRole('button',{name:'下一周',exact:true}).click();await page.waitForTimeout(60);
+   const after=await page.locator('.os-page-status').textContent();
+   assert.notEqual(after,before,`翻到下一周，页头周次应当变：${before}`);
+   assert.equal(await page.getByRole('button',{name:'本周',exact:true}).isDisabled(),false);
+   await page.getByRole('button',{name:'本周',exact:true}).click();await page.waitForTimeout(60);
+   assert.equal(await page.locator('.os-page-status').textContent(),before);
+   // 学期之外：翻到二十周以后，网格要空、要说一句话，不能是一张默默的白板。
+   for(let i=0;i<20;i++){await page.getByRole('button',{name:'下一周',exact:true}).click();}
+   await page.waitForTimeout(60);
+   assert.equal(await page.locator('.os-class').count(),0);
+   assert.match(await page.locator('.os-week-empty').textContent(),/学期之外/);
+   await page.getByRole('button',{name:'本周',exact:true}).click();await page.waitForTimeout(60);
+  }
+  await page.evaluate(()=>v.setTab('today'));await page.waitForTimeout(80);
+  // 今日页那张卡点一行，要打开同一门课的课堂笔记，留在今日页；课表从卡头的「课表 →」去。
+  if(await page.locator('.os-class-row').count()){
+   const name=await page.locator('.os-class-row-main strong').first().textContent();
+   await page.locator('.os-class-row').first().click();await page.waitForTimeout(80);
+   assert.equal(await page.evaluate(()=>window.openedClassNote),name);
+   assert.notEqual(await page.locator('.os-heading h1').textContent(),'课表');
+   await page.locator('.os-today-classes').getByRole('button',{name:'课表 →'}).click();await page.waitForTimeout(80);
+   assert.equal(await page.locator('.os-heading h1').textContent(),'课表');
+   await page.evaluate(()=>v.setTab('today'));await page.waitForTimeout(80);
+  }
   // 留两张壁纸下的截图。其余截图都在平色底上拍的，而这一版改的东西
   // 只有在照片上才看得出来——没有它，评审时只能看数字。
   for(const [theme,file] of [['','today-wallpaper.png'],['theme-dark ','today-wallpaper-dark.png']]){
@@ -469,7 +531,8 @@ await firstRow.hover();await page.waitForTimeout(300);await firstRow.getByRole('
        .map(e=>{const r=e.getBoundingClientRect();return {name:(e.textContent||'').trim().slice(0,10),top:r.top,bottom:r.bottom,left:r.left,right:r.right};});
      const scrollers=[...root.querySelectorAll('*')]
        .filter(e=>e.scrollHeight>e.clientHeight+1&&!e.classList.contains('os-detail-list'))
-       .map(e=>e.className||e.tagName);
+       // 带上超出多少、以及里面每一块多高：只报类名的话，失败时只能猜。
+       .map(e=>`${e.className||e.tagName} ${e.scrollHeight}/${e.clientHeight} [${[...e.children].map(c=>`${c.className||c.tagName}:${Math.round(c.getBoundingClientRect().height)}`).join(' ')}]`);
      return {box:{top:b.top,bottom:b.bottom,left:b.left,right:b.right},parts,scrollers};
    });
    assert.deepEqual(layout.scrollers,[],'补充详情弹窗出现非预期滚动容器：'+JSON.stringify({...size,scrollers:layout.scrollers}));
@@ -510,7 +573,9 @@ await firstRow.hover();await page.waitForTimeout(300);await firstRow.getByRole('
  await page.getByRole('button',{name:'收起项目设置',exact:true}).click();await page.evaluate(()=>{for(const e of document.querySelectorAll('body>div'))if(e.style.position==='fixed')e.remove();});
  await page.evaluate(()=>v.refresh(true));await page.getByRole('button',{name:'编辑项目',exact:true}).last().click();assert.equal(await page.getByLabel('项目名称',{exact:true}).inputValue(),'内联测试项目');await page.getByLabel('项目名称',{exact:true}).fill('重命名测试项目');await page.getByLabel('项目名称',{exact:true}).press('Tab');await page.waitForTimeout(60);assert.equal(await page.evaluate(()=>window.projectRename.name),'02 项目/重命名测试项目.md');await page.getByRole('button',{name:'收起项目设置',exact:true}).click();await page.evaluate(()=>{for(const e of document.querySelectorAll('body>div'))if(e.style.position==='fixed')e.remove();});await page.evaluate(()=>v.refresh(true));page.once('dialog',dialog=>dialog.accept());await page.getByRole('button',{name:'删除项目',exact:true}).last().click();await page.waitForTimeout(60);assert.equal(await page.evaluate(()=>window.projectDeleted),'02 项目/重命名测试项目.md');
  await page.evaluate(()=>v.setTab('today'));
- assert.match(await page.locator('.os-focus-widget>strong').textContent(),/完成第三章/);
+ // 7.1 起今日页中间那张卡是「今日课程」，不再显示今日要务；要务只剩专注台的绑定条在说。
+ // 课程随真实日期变（夹具用的是真课表），这里只断言卡在、有内容。
+ assert.ok((await page.locator('.os-course-intent-title, .os-course-intent-empty').first().textContent()).trim());
  // 选了今日要务，专注台的绑定条要跟着显示它——两处说的是同一件事，不该各说各的。
  assert.match(await page.locator('.os-focus-bind').textContent(),/正在进行：完成第三章/);
  {
@@ -529,7 +594,11 @@ await firstRow.hover();await page.waitForTimeout(300);await firstRow.getByRole('
  await page.getByRole('button',{name:'＋ 新任务',exact:true}).click();await page.getByLabel('任务名称 *',{exact:true}).fill('完整任务');await page.getByLabel('所属项目',{exact:true}).selectOption('02 项目/本周学习计划.md');await page.getByLabel('优先级',{exact:true}).selectOption('P1');await page.getByLabel('周期与重复',{exact:true}).selectOption('weekly');await page.getByLabel('预计成果 / 完成标准',{exact:true}).fill('交付一张卡片');await page.getByRole('button',{name:'＋ 添加子任务',exact:true}).click();await page.getByLabel('子任务内容',{exact:true}).fill('完成推导');
    await page.getByText('高级设置',{exact:true}).click();await page.getByLabel('单番茄时长（分钟）',{exact:true}).fill('40');await page.evaluate(()=>document.querySelector('.los-task-modal').scrollTop=0);await page.screenshot({path:path.join(out,'task-modal.png')});for(const width of [420,360]){await page.setViewportSize({width,height:720});assert.equal(await page.locator('.los-task-modal').evaluate(e=>e.scrollWidth<=e.clientWidth+2),true);const taskModalFields=await page.locator('.los-task-modal input:not([type=checkbox]),.los-task-modal select,.los-task-modal textarea').evaluateAll(fields=>fields.map(field=>{const a=field.getBoundingClientRect(),b=field.closest('.los-task-modal').getBoundingClientRect();return {left:a.left,right:a.right,parentLeft:b.left,parentRight:b.right,visible:a.width>0&&a.height>0};}));assert.ok(taskModalFields.filter(field=>field.visible).every(field=>field.left>=field.parentLeft-1&&field.right<=field.parentRight+1),JSON.stringify(taskModalFields));}await page.setViewportSize({width:1100,height:720});await page.locator('.los-task-modal').evaluate(e=>e.scrollTop=e.scrollHeight);await page.evaluate(()=>window.failCreate=true);await page.getByRole('button',{name:'创建任务',exact:true}).evaluate(button=>button.form.requestSubmit(button));assert.equal(await page.getByLabel('任务名称 *',{exact:true}).inputValue(),'完整任务');await page.evaluate(()=>window.failCreate=false);await page.getByRole('button',{name:'创建任务',exact:true}).evaluate(button=>button.form.requestSubmit(button));assert.equal(await page.evaluate(()=>window.createdTask.checklist[0].text),'完成推导');assert.equal(await page.evaluate(()=>window.createdTask.repeat),'weekly');
  await page.evaluate(()=>v.setTab('daily'));assert.equal(await page.locator('.os-audit-card').count(),6);assert.equal(await page.locator('.os-audit-card').first().locator('details[open]').count(),1);await page.screenshot({path:path.join(out,'daily-compact.png')});await page.evaluate(()=>v.setTab('today'));
- assert.equal(await page.locator('.os-focus-picker').first().getAttribute('open'),null);
+ // 今日页不再有要务选择器；点专注台的绑定条要去行动页，而不是什么都不发生。
+ assert.equal(await page.locator('.os-focus-picker').count(),0);
+ await page.locator('.os-focus-bind').click();await page.waitForTimeout(80);
+ assert.equal(await page.evaluate(()=>v.tab),'tasks');
+ await page.evaluate(()=>v.setTab('today'));
  await page.evaluate(()=>{const e=document.createElement('div');e.className='markdown-preview-view';e.style.position='fixed';e.innerHTML='<div class="inline-title">版本迭代</div><h1>版本迭代</h1>';document.body.append(e);});
  assert.equal(await page.locator('.inline-title').isVisible(),false);assert.equal(await page.locator('.markdown-preview-view h1').isVisible(),true);
  // 同屏可见任务行数。6.1 之前是 5 条：行高 117px，其中一行是从不填的预算字段
@@ -613,6 +682,18 @@ await firstRow.hover();await page.waitForTimeout(300);await firstRow.getByRole('
   assert.ok(reach.closeBelow<=1,`滚到底后「关闭」仍在弹窗外 ${Math.round(reach.closeBelow)}px，够不着`);
  }
  await page.screenshot({path:path.join(out,'widgets-settings.png')});
+ // 玻璃浓度：拖动要实时写到根节点的 --os-glass-tint，面板的底色要真的跟着变淡；松手才保存。
+ {
+  const tint=page.getByLabel('玻璃浓度：0 极清透，100 全着色',{exact:true});
+  const before=await page.evaluate(()=>{const s=getComputedStyle(document.querySelector('.os-panel'));return s.backgroundImage+'|'+s.backgroundColor;});
+  await tint.fill('0');
+  assert.equal(await page.evaluate(()=>document.documentElement.style.getPropertyValue('--os-glass-tint').trim()),'0');
+  const after=await page.evaluate(()=>{const s=getComputedStyle(document.querySelector('.os-panel'));return s.backgroundImage+'|'+s.backgroundColor;});
+  assert.notEqual(after,before,'玻璃浓度拖到 0，面板底色应当变');
+  assert.equal(await page.evaluate(()=>window.widgets.data.wallpaper.glassTint),0);
+  await tint.fill('50');
+  assert.equal(await page.evaluate(()=>document.documentElement.style.getPropertyValue('--os-glass-tint').trim()),'0.5');
+ }
  // 关掉一个挂件立刻落盘并重画左栏：设置弹窗没有「保存」按钮，这条是它的契约。
  await page.getByLabel('显示天气挂件',{exact:true}).uncheck();await page.waitForTimeout(60);
  assert.equal(await page.locator('.os-widgets .ow-card').count(),3,'取消勾选后左栏应少一块');

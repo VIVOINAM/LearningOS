@@ -211,6 +211,33 @@ async function main() {
     assert.ok(view.content.children.length > 0, `tab ${tab} should render`);
   }
   view.onClose();
+
+  // 一门课可以关联很多份教材：一份直接开，多份先让人选，一份都没有时不要静默失败。
+  app.vault.files.set("book/b.pdf", new MockFile("book/b.pdf", ""));
+  const course = workbench.courseCatalog()[0];
+  const opened = [];
+  workbench.openTextbook = async (file) => { opened.push(file.path); };
+  workbench.data.courses = { [course.id]: { next: "", exam: "", books: [], folders: [] } };
+
+  await workbench.startCourse(course);
+  assert.deepEqual(opened, [], "没关联教材时不该打开任何 PDF");
+
+  workbench.data.courses[course.id].books = ["book/a.pdf"];
+  assert.equal(workbench.courseBooksFor(course).length, 1);
+  await workbench.startCourse(course);
+  assert.deepEqual(opened, ["book/a.pdf"], "只有一份时应当直接打开，不要多一次点击");
+
+  workbench.data.courses[course.id].books = ["book/a.pdf", "book/b.pdf"];
+  assert.equal(workbench.courseBooksFor(course).length, 2, "两份都要算进来，否则下一条断言会假过");
+  await workbench.startCourse(course);
+  assert.deepEqual(opened, ["book/a.pdf"], "两份以上时应当先弹选择，而不是替人挑一份");
+
+  // 只能要一份的地方（任务跳转、选择弹窗的排序）优先上次在读的那一份。
+  workbench.data.lastTextbook = "book/b.pdf";
+  assert.equal(workbench.preferredBookFor(course), "book/b.pdf", "应当优先上次在读的那一份");
+  workbench.data.lastTextbook = "book/不在这门课.pdf";
+  assert.equal(workbench.preferredBookFor(course), "book/a.pdf", "上次在读的不属于这门课时退回第一份");
+
   console.log("workbench onload smoke：通过");
 }
 

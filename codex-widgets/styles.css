@@ -7,8 +7,8 @@
   padding: 9px 11px; border-radius: 12px;
   background: var(--os-glass);
   -webkit-backdrop-filter: var(--os-glass-blur); backdrop-filter: var(--os-glass-blur);
-  border: 1px solid var(--os-glass-shade); border-top-color: var(--os-glass-lit); border-left-color: var(--os-glass-lit);
-  box-shadow: var(--os-glass-inset);
+  /* 7.0：iOS 27 的玻璃边——外圈一道压暗的边加内圈高光，不再是四色描边。 */
+  border: 0; box-shadow: 0 0 0 .5px var(--os-glass-rim), var(--os-glass-inset);
 }
 
 /* 时间不要外框：它是左栏最上面一组字，不是一张卡。加上框就变成积木堆叠的第一块，
@@ -32,7 +32,7 @@
    nowrap 是硬要求：这一行折行，卡片就从 62px 长到 99px，四个挂件一起溢出。
    最长的情况是十二小时制加秒的「12:00:00」，八个字符，在 140px 的可用宽度里放得下。 */
 .ow-clock-time {
-  font-family: var(--os-serif); font-variant-numeric: tabular-nums;
+  font-family: var(--os-display); font-variant-numeric: tabular-nums;
   font-size: 27px; line-height: 1.1; letter-spacing: -.5px; color: var(--os-ink);
   white-space: nowrap; overflow: hidden; text-overflow: clip;
 }
@@ -51,12 +51,12 @@
 .ow-count-days.is-past { color: var(--os-muted); opacity: .75; }
 
 /* 左栏竖版的天气：图标和温度并排，天气文字在底下。
-   和横排版共用同一幕，只是排布不同。字改用 --os-serif——原来这里写死了
+   和横排版共用同一幕，只是排布不同。字改用 --os-display——原来这里写死了
    Georgia，而设计系统里那三处数字（专注计时、左栏时钟、页头气温）本该
    是同一种字的三个尺寸，这一处一直在外面。 */
 .ow-wx-row { display: flex; align-items: center; gap: 8px; min-width: 0; }
 .ow-wx-temp {
-  font-family: var(--os-serif); font-variant-numeric: tabular-nums;
+  font-family: var(--os-display); font-variant-numeric: tabular-nums;
   font-size: 23px; line-height: 1.1; color: var(--os-ink);
 }
 .ow-wx-meta {
@@ -79,17 +79,18 @@
 
 /* ---------- 页头里的横排渲染 ---------- */
 
-/* 页头那一行不是卡片：没有描边、没有底色，就是标题旁边的一行字。
-   做成卡片会和右上角那两个按钮打架——一行里三个带框的东西，谁也不像主角。 */
+/* 7.0：页头已经是一整条磨砂顶栏，天气在里面做成一枚玻璃胶囊，和旁边的按钮同一种形状。
+   6.x 这里刻意不做卡片（「一行三个带框的东西谁也不像主角」）；现在三样都是胶囊，
+   形状一致之后它们读成一组工具，而不是三个互相打架的盒子。 */
 .os-widgets-header .ow-card {
-  flex-direction: row; align-items: center; gap: 9px;
-  padding: 0; border: 0; background: transparent; border-radius: 0;
+  flex-direction: row; align-items: center; gap: 8px;
+  padding: 3px 16px 3px 10px; border-radius: var(--os-r-pill);
   white-space: nowrap; min-width: 0;
 }
 /* 7.0：从「四样平铺、一样重」改成一个读数块。
    温度当主，天气和地名退成它底下的一行小字；图标和温度取同一视觉重量。 */
 .ow-wx-read { display: flex; flex-direction: column; align-items: flex-start; gap: 1px; min-width: 0; }
-.os-widgets-header .ow-wx-temp { font-size: 25px; }
+.os-widgets-header .ow-wx-temp { font-size: 20px; font-weight: 600; }
 .os-widgets-header .ow-wx-meta { letter-spacing: .02em; }
 
 /* ---------- 天气图标：自绘 + 动效 ---------- */
@@ -102,7 +103,7 @@
    backdrop-filter；7.0 又把模糊打开了，所以这里更不能碰布局属性。 */
 
 .ow-art { flex: none; width: 26px; height: 28px; color: var(--os-body); overflow: visible; }
-.os-widgets-header .ow-art { width: 30px; height: 32px; }
+.os-widgets-header .ow-art { width: 26px; height: 28px; }
 /* 退路：幕缺了就用 lucide 字形，再不行整段去掉只留温度。 */
 .ow-art-fallback { display: inline-flex; align-self: center; color: var(--os-muted); flex: none; }
 .ow-art-fallback svg { width: 18px; height: 18px; stroke-width: 1.6; }
@@ -182,6 +183,7 @@
 .ow-wallpaper-visibility { flex-wrap: nowrap; }
 .ow-wallpaper-range { flex: 1 1 140px; min-width: 90px; accent-color: var(--os-accent-2); }
 .ow-wallpaper-value { flex: none; width: 3.5em; text-align: right; color: var(--os-body); font-variant-numeric: tabular-nums; }
+.ow-range-end { flex: none; font-size: var(--fs-meta); color: var(--os-body); }
 .ow-settings .ow-input { flex: 1; min-width: 90px; max-width: 100%; min-height: 30px; padding: 5px 8px; border-radius: 6px; font: inherit; }
 .ow-settings .ow-number { flex: none; width: 72px; }
 .ow-textarea { width: 100%; max-width: 100%; resize: vertical; min-height: 110px; max-height: 260px; font: inherit; line-height: 1.7; padding: 8px; border-radius: 6px; }
@@ -193,15 +195,3 @@
 .ow-actions { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-top: 16px; padding-top: 10px; border-top: 1px solid var(--background-modifier-border, var(--os-line)); }
 .ow-save-state { font-size: var(--fs-meta); color: var(--os-accent-2); overflow-wrap: anywhere; }
 .ow-settings .ow-primary { min-height: 32px; padding: 6px 14px; cursor: pointer; background: var(--os-accent-2); color: var(--os-paper); border: 0; border-radius: 5px; }
-
-/* 设置页也使用和工作台相同的玻璃壳，避免从壁纸页跳回一块原生实色弹窗。 */
-.modal:has(.ow-settings) {
-  background:var(--os-glass-strong);
-  -webkit-backdrop-filter:var(--os-glass-blur);backdrop-filter:var(--os-glass-blur);
-  border:1px solid var(--os-glass-shade);border-top-color:var(--os-glass-lit);border-left-color:var(--os-glass-lit);
-  box-shadow:var(--os-glass-inset),0 24px 64px rgba(32,24,18,.18);
-}
-.modal:has(.ow-settings) .modal-content{background:transparent}
-.ow-order-row{background:var(--os-glass-soft);border-color:var(--os-glass-shade);box-shadow:var(--os-glass-inset)}
-.ow-settings :is(.ow-input,.ow-textarea,select){background:var(--os-glass-field);border-color:var(--os-glass-shade);box-shadow:var(--os-glass-inset)}
-.ow-settings :is(.ow-move,.ow-slot,.ow-quiet){background:var(--os-glass-soft);border-color:var(--os-glass-shade)}

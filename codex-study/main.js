@@ -72,6 +72,15 @@ class CodexStudy extends Plugin {
         return true;
       },
     });
+    const historyCommand=(direction,checking)=>{
+      const ctx=this.engine?.contexts.get(this.app.workspace.activeLeaf);
+      const available=direction==='back'?ctx?.navigationHistory?.canBack():ctx?.navigationHistory?.canForward();
+      if(!available)return false;
+      if(!checking)this.engine.navigateHistory(ctx,direction).catch(this.engine.report);
+      return true;
+    };
+    this.addCommand({id:'pdf-navigation-back',name:'PDF 返回跳转前的位置',checkCallback:checking=>historyCommand('back',checking)});
+    this.addCommand({id:'pdf-navigation-forward',name:'PDF 前进到下一个跳转位置',checkCallback:checking=>historyCommand('forward',checking)});
     this.apiVersion = 1;
     this.registerEvent(this.app.workspace.on('file-open', file => {
       if (file?.extension === 'pdf') {

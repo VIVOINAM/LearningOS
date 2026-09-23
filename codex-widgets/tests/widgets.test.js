@@ -43,7 +43,7 @@ test('时钟文本：只有二十四小时制，读数宽度一天里不变', ()
   assert.equal(core.clockText(new Date(2026, 8, 19, 13, 0)), '13:00');
 
   // 7.0 删掉十二小时制的真正理由：读数不许在一天里改变自己占的宽度。
-  // 时钟用的是 --os-serif 的展示号，在 196px 的固定左栏里，宽一位就是看得见的抖动。
+  // 时钟用的是 --os-display 的展示号，在 196px 的固定左栏里，宽一位就是看得见的抖动。
   // 这条断言比「等于 09:05」重要——它挡的是「哪天又加回一个不补零的开关」。
   const widths = new Set();
   for (let h = 0; h < 24; h++) widths.add(core.clockText(new Date(2026, 8, 19, h, 0)).length);
@@ -203,6 +203,16 @@ test('壁纸可见度：默认 14%，并限制在 0–100%', () => {
   assert.equal(core.normalize({wallpaper:{visibility:-20}}).wallpaper.visibility, 0);
   assert.equal(core.normalize({wallpaper:{visibility:180}}).wallpaper.visibility, 100);
   assert.equal(core.normalize({wallpaper:{visibility:'坏数据'}}).wallpaper.visibility, 14);
+});
+
+test('玻璃浓度：默认 50%（等于 7.0 的固定浓度，装上什么都不变），并限制在 0–100%', () => {
+  assert.equal(core.normalize(null).wallpaper.glassTint, 50);
+  assert.equal(core.normalize({wallpaper:{glassTint:0}}).wallpaper.glassTint, 0, '0 是合法值，不能被当成「没填」');
+  assert.equal(core.normalize({wallpaper:{glassTint:100}}).wallpaper.glassTint, 100);
+  assert.equal(core.normalize({wallpaper:{glassTint:-5}}).wallpaper.glassTint, 0);
+  assert.equal(core.normalize({wallpaper:{glassTint:'坏数据'}}).wallpaper.glassTint, 50);
+  // 旧数据没有这个字段：可见度照旧，浓度取默认
+  assert.deepEqual([core.normalize({wallpaper:{visibility:37}}).wallpaper.visibility, core.normalize({wallpaper:{visibility:37}}).wallpaper.glassTint], [37, 50]);
 });
 
 test('壁纸按日取：同一天同一张，与目录读出的顺序无关', () => {

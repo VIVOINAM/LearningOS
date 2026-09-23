@@ -16,6 +16,8 @@ const VERSION = JSON.parse(fs.readFileSync(path.join(ROOT, "version.json"), "utf
 // 设计令牌唯一定义处，内联到每个插件的 styles.css 最前面。
 // 每个插件都带一份是故意的：模块可以单独停用，只启用其中一个时令牌也得在。
 const TOKENS = fs.readFileSync(path.join(ROOT, "shared", "tokens.css"), "utf8");
+// 共用组件（弹窗皮肤）同理：单独启用 codex-capture 时，它的弹窗也得长得对。
+const COMPONENTS = fs.readFileSync(path.join(ROOT, "shared", "components.css"), "utf8");
 const STAGE_MODE = ARGS.includes("--stage") || process.env.CODEX_STAGE === "1";
 const PLUGIN_ROOT = STAGE_MODE ? path.join(ROOT, "dist", "plugins") : path.join(VAULT, ".obsidian", "plugins");
 const COMMUNITY = path.join(VAULT, ".obsidian", "community-plugins.json");
@@ -69,8 +71,9 @@ function buildPlugin(id) {
 
   const styles = path.join(sourceDir, "styles.css");
   if (fs.existsSync(styles)) {
-    const own = fs.readFileSync(styles, "utf8");
-    fs.writeFileSync(path.join(targetDir, "styles.css"), `${TOKENS}\n${own}`, "utf8");
+    const railStyles = path.join(sourceDir, 'reading-rail.css');
+    const own = fs.readFileSync(styles, "utf8") + (fs.existsSync(railStyles) ? '\n' + fs.readFileSync(railStyles, 'utf8') : '');
+    fs.writeFileSync(path.join(targetDir, "styles.css"), `${TOKENS}\n${COMPONENTS}\n${own}`, "utf8");
   }
 
   console.log(`[部署] ${id} · ${VERSION} · ${result.modules.length} 个模块 · ${(result.code.length / 1024).toFixed(1)} KB -> ${path.relative(VAULT, targetDir)}`);

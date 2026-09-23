@@ -17,7 +17,14 @@ function mountPanel(engine: any, ctx: any) {
   const resizer=el(ctx.panel,'div','cs-inspector-resizer');resizer.setAttribute('role','separator');resizer.setAttribute('aria-label','调整学习批注阅读轨宽度');resizer.setAttribute('aria-orientation','vertical');
   resizer.onpointerdown=(event:PointerEvent)=>{if(event.button!==0)return;event.preventDefault();resizer.setPointerCapture?.(event.pointerId);root.classList.add('cw-study-resizing');const widthAt=(x:number)=>Math.max(260,Math.min(420,root.getBoundingClientRect().right-x));const move=(e:PointerEvent)=>{root.style.setProperty('--cw-study-panel-width',widthAt(e.clientX)+'px');ctx.win.dispatchEvent(new ctx.win.Event('resize'));};const up=async(e:PointerEvent)=>{move(e);root.classList.remove('cw-study-resizing');ctx.win.removeEventListener('pointermove',move,true);ctx.win.removeEventListener('pointerup',up,true);ctx.resizeCleanup=null;engine.data.panelWidth=Math.round(widthAt(e.clientX));await engine.p.save();};ctx.resizeCleanup=()=>{root.classList.remove('cw-study-resizing');ctx.win.removeEventListener('pointermove',move,true);ctx.win.removeEventListener('pointerup',up,true);};ctx.win.addEventListener('pointermove',move,true);ctx.win.addEventListener('pointerup',up,true);};
   const head=el(ctx.panel,'div','cs-inspector-head');const title=el(head,'div','cs-inspector-title');ctx.panelTitle=el(title,'strong','','本页笔记');ctx.panelCount=el(title,'span','cs-page-count','0 条');
-  const headActions=el(head,'div','cs-inspector-actions');ctx.location=el(headActions,'span','cs-inspector-location','');
+  const headActions=el(head,'div','cs-inspector-actions');
+  const finishNavigation=()=>ctx.win.setTimeout(()=>engine.updateNavigationControls(ctx),0);
+  ctx.navBack=button(headActions,'←',async()=>{await engine.navigateHistory(ctx,'back');finishNavigation();},'cs-nav-button');
+  ctx.navBack.title='返回 PDF 跳转前的位置';ctx.navBack.setAttribute('aria-label','返回 PDF 跳转前的位置');
+  ctx.navForward=button(headActions,'→',async()=>{await engine.navigateHistory(ctx,'forward');finishNavigation();},'cs-nav-button');
+  ctx.navForward.title='前进到下一个 PDF 跳转位置';ctx.navForward.setAttribute('aria-label','前进到下一个 PDF 跳转位置');
+  engine.updateNavigationControls(ctx);
+  ctx.location=el(headActions,'span','cs-inspector-location','');
   const menu=button(headActions,'···',()=>{
     const m=new Menu();
     m.addItem((i:any)=>i.setTitle('导出 Markdown').onClick(()=>engine.exportMarkdown(ctx.path).catch(engine.report)));
@@ -38,13 +45,8 @@ function mountPanel(engine: any, ctx: any) {
   el(ctx.panel,'p','cs-hint cs-capture-hint','选中文字摘录 · Alt 单击选框 / 拖拽截图');
   // 两个视图：附近笔记 / 公式速记。选中哪个一直听手动的，翻页不抢——
   // 5.5 那版会按当前页的内容自动切，最烦人的地方就是抢走你刚选的东西。
-  const tabs=el(ctx.panel,'div','cs-tab-row');tabs.setAttribute('role','tablist');
   ctx.tab='notes';
   const tabButtons=new Map<string,HTMLElement>();
-  for(const [key,label] of [['notes','附近笔记'],['formula','公式速记']]) {
-    const tab=button(tabs,label as string,()=>setTab(key as string),'cs-tab');
-    tab.setAttribute('role','tab');tabButtons.set(key as string,tab);
-  }
   const setTab=(key:string)=>{
     ctx.tab=key;
     for(const [value,tab] of tabButtons)tab.setAttribute('aria-selected',String(value===key));
@@ -72,6 +74,13 @@ function mountPanel(engine: any, ctx: any) {
   questionChip.setAttribute('aria-pressed','false');questionChip.setAttribute('aria-label','只看未解决的疑问');
   ctx.list=el(ctx.panel,'div','cs-card-list');renderCards(engine,ctx);
   ctx.formulaPad=mountFormulaPad(engine,ctx,ctx.panel);
+  // 切换放在内容之后并吸在侧栏底部：阅读时拇指不用再够到顶端，也避开 Obsidian 状态栏。
+  const tabDock=el(ctx.panel,'div','cs-tab-dock');
+  const tabs=el(tabDock,'div','cs-tab-row');tabs.setAttribute('role','tablist');
+  for(const [key,label] of [['notes','附近笔记'],['formula','公式速记']]) {
+    const tab=button(tabs,label as string,()=>setTab(key as string),'cs-tab');
+    tab.setAttribute('role','tab');tabButtons.set(key as string,tab);
+  }
   setTab(ctx.tab);
 }
 /** 当前页应该落在面板正中的那条线（视口坐标）。选哪一组、对哪条边由 anchorIndex 定。 */

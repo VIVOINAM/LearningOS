@@ -71,6 +71,23 @@ const ANCHORS = [
   ["分段选中", ".os-modes .os-mode.is-active", "玻璃药丸"],
   ["分段未选", ".os-modes .os-mode:not(.is-active)", "玻璃槽"],
   ["页脚", ".os-footer", "页面底"],
+  // 「今天的课」。没课的日子这两行不存在，那天就不量——量不到的锚点不算数，
+  // 防空转靠的是 minAnchors，不靠每一条都在。
+  ["今天的课 · 课名", ".os-class-row-main strong", "玻璃卡"],
+  ["今天的课 · 教室", ".os-class-row-main span", "玻璃卡"],
+];
+
+/** 课表页自己的一张表。课块是实色，照理不受壁纸影响——这张表就是来证明「照理」的。 */
+const SCHEDULE_ANCHORS = [
+  ["页标题", ".os-heading h1", "页面底"],
+  ["星期", ".os-week-weekday", "玻璃卡"],
+  ["时间刻度", ".os-week-hour", "玻璃卡"],
+  ["今天的日期", ".os-week-head.is-today .os-week-date", "墨绿圆片"],
+  ["课块标题", ".os-class-title", "实色课块"],
+  ["课块时间", ".os-class-meta", "实色课块"],
+  ["下一节时间", ".os-class-time strong", "玻璃卡"],
+  ["课程事实", ".os-class-facts dd", "玻璃卡"],
+  ["色标说明", ".os-course-key-row span", "玻璃卡"],
 ];
 
 function luminance(r, g, b) {
@@ -104,6 +121,8 @@ async function measure(page, { anchors = ANCHORS, themes = ["light", "dark"], mi
         // 最坏情况：用户把「图片可见度」滑到 100，画面层遮罩为 0。
         // 托底层不跟这个滑块走，所以这里量的正是「滑块滑到底之后还剩什么」。
         document.documentElement.style.setProperty("--os-scrim-opacity", "0");
+        // 同理：玻璃浓度滑到最清透。闸门量的是两个滑块都拖到最坏那一端之后还剩什么。
+        document.documentElement.style.setProperty("--os-glass-tint", "0");
         const dark = theme === "dark" ? "theme-dark" : "";
         if (image === null) {
           document.body.style.removeProperty("--os-wallpaper");
@@ -156,6 +175,7 @@ async function measure(page, { anchors = ANCHORS, themes = ["light", "dark"], mi
     document.body.className = cls;
     document.body.style.removeProperty("--os-wallpaper");
     document.documentElement.style.removeProperty("--os-scrim-opacity");
+    document.documentElement.style.removeProperty("--os-glass-tint");
   }, themeBefore);
 
   if (seen.size < minAnchors) {
@@ -177,7 +197,7 @@ function report(rows) {
   return { bad, worst, combos };
 }
 
-module.exports = { BACKDROPS, ANCHORS, MIN, measure, report, ratio, luminance };
+module.exports = { BACKDROPS, ANCHORS, SCHEDULE_ANCHORS, MIN, measure, report, ratio, luminance };
 
 /* ---------------- 独立模式 ---------------- */
 

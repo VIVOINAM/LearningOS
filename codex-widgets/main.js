@@ -163,6 +163,7 @@ class CodexWidgets extends Plugin {
     this.apiVersion = 1;
     if (this.weatherWanted()) this.fetchWeather().catch((e) => console.error("天气获取失败", e));
     this.applyWallpaperVisibility();
+    this.applyGlassTint();
     this.applyWallpaper();
   }
 
@@ -176,6 +177,7 @@ class CodexWidgets extends Plugin {
     this.mounts.clear();
     this.clearWallpaper();
     document.documentElement.style.removeProperty("--os-scrim-opacity");
+    document.documentElement.style.removeProperty("--os-glass-tint");
   }
 
   /* ---------- Windows 聚焦壁纸 ---------- */
@@ -186,6 +188,18 @@ class CodexWidgets extends Plugin {
     const opacity = Number((1 - visibility / 100).toFixed(2));
     // --os-scrim 在 :root 定义；依赖变量也必须写到根节点，才能参与它的计算。
     document.documentElement.style.setProperty("--os-scrim-opacity", String(opacity));
+  }
+
+  /**
+   * 玻璃浓度。和遮罩一样写到根节点：--os-glass 在 :root / body.theme-dark 上定义，
+   * 它依赖的变量必须在那一层就有值，写到 .os-root 上它看不见。
+   *
+   * 这个滑块只管玻璃底色的浓淡。玻璃背后的扩散与亮度钳位不跟它走——那是字的底线，
+   * iOS 27 的「极清透」会把它一起放掉，这里不放：可读性不做成能滑到零的设置。
+   */
+  applyGlassTint() {
+    const tint = core.glassTint(this.data.wallpaper.glassTint);
+    document.documentElement.style.setProperty("--os-glass-tint", String(tint / 100));
   }
 
   /**
@@ -375,7 +389,7 @@ class CodexWidgets extends Plugin {
 
   /**
    * 天气的横排版。7.0 之前是「字形 + 温度 + 天气 + 地名」四样平铺在一行，
-   * 每样一样重；现在是一个读数块：温度当主（走 --os-serif，和专注计时、
+   * 每样一样重；现在是一个读数块：温度当主（走 --os-display，和专注计时、
    * 左栏时钟同一种字的三个尺寸），天气和地名退成它底下的一行小字。
    *
    * 能这么做是因为页头那条托底带先落了。在那之前这块文字直接压在照片上，
@@ -622,7 +636,7 @@ class WidgetSettings extends Modal {
   }
 
   renderWallpaper(host) {
-    this.section(host, "背景", "用 Windows 桌面聚焦的图片当工作台背景，每天换一张。只读本地文件，不联网、不上传。可见度可以自己调；没开聚焦或读不到时自动退回原来的渐变。");
+    this.section(host, "背景", "用 Windows 桌面聚焦的图片当工作台背景，每天换一张。只读本地文件，不联网、不上传。可见度可以自己调；没开聚焦或读不到时自动退回原来的渐变。玻璃浓度调的是卡片有多透：拖到最清透，字也照样认得出。");
     const wrap = el(host, "label", "ow-check");
     const box = el(wrap, "input");
     box.type = "checkbox";
@@ -654,6 +668,28 @@ class WidgetSettings extends Modal {
     };
     visibility.oninput = preview;
     visibility.onchange = () => { preview(); this.commit("背景可见度已保存"); };
+    // 玻璃浓度不跟着「使用聚焦图片」那个勾走：没有壁纸时卡片也是玻璃，只是背后透的是渐变。
+    const glass = el(host, "label", "ow-check ow-wallpaper-visibility");
+    el(glass, "span", "", "玻璃浓度");
+    el(glass, "span", "ow-range-end", "极清透");
+    const tint = el(glass, "input", "ow-wallpaper-range");
+    tint.type = "range";
+    tint.min = "0";
+    tint.max = "100";
+    tint.step = "1";
+    tint.value = String(core.glassTint(this.p.data.wallpaper.glassTint));
+    tint.setAttribute("aria-label", "玻璃浓度：0 极清透，100 全着色");
+    el(glass, "span", "ow-range-end", "全着色");
+    const tintValue = el(glass, "output", "ow-wallpaper-value", `${tint.value}%`);
+    const previewTint = () => {
+      const percent = core.glassTint(tint.value);
+      this.p.data.wallpaper.glassTint = percent;
+      tint.value = String(percent);
+      tintValue.textContent = `${percent}%`;
+      this.p.applyGlassTint();
+    };
+    tint.oninput = previewTint;
+    tint.onchange = () => { previewTint(); this.commit("玻璃浓度已保存"); };
     btn(host, "换一张", async () => {
       // 往后拨一格。此前这里只是把 wallpaperPath 清空再调一次 applyWallpaper，
       // 而挑图是 (列表, 日期) 的纯函数——同一天怎么算都是同一张。

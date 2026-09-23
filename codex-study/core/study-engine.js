@@ -12,6 +12,7 @@ const { StudyGoalModal } = require("./study-modals.js");
 
 const {StorageManager,reference}=require('./storage-manager.ts');
 const {mountPanel,renderCards}=require('./view-panel.ts');
+const {installPdfNavigation}=require('./pdf-navigation.js');
 const {PdfOverlay,revealRegion}=require('./pdf-overlay.ts');
 const {dimPages}=require('./immersive.js');
 const TASK_PATH = "00 工作台/今日任务.md";
@@ -193,7 +194,24 @@ class StudyEngine {
     } finally {ctx.restoring=false;}
     this.capture(ctx);ctx.selection=null;if(ctx.selectionLabel)ctx.selectionLabel.textContent='在 PDF 中选择文字后，可高亮或记录疑问。';this.paint(ctx);
   }
+  rememberNavigation(ctx,position) {
+    if(!ctx||ctx.closed||ctx.restoring)return false;
+    const remembered=ctx.navigationHistory?.remember(position||this.position(ctx))||false;
+    this.updateNavigationControls(ctx);return remembered;
+  }
+  updateNavigationControls(ctx) {
+    if(!ctx)return;
+    if(ctx.navBack)ctx.navBack.disabled=!ctx.navigationHistory?.canBack();
+    if(ctx.navForward)ctx.navForward.disabled=!ctx.navigationHistory?.canForward();
+  }
+  async navigateHistory(ctx,direction) {
+    if(!ctx||ctx.closed)return false;
+    const target=ctx.navigationHistory?.take(direction,this.position(ctx));
+    if(!target){this.updateNavigationControls(ctx);return false;}
+    await this.jump(ctx,target);this.updateNavigationControls(ctx);return true;
+  }
   async reveal(ctx, annotation) {
+    this.rememberNavigation(ctx);
     ctx.root.classList.remove('cw-study-collapsed');ctx.win.dispatchEvent(new ctx.win.Event('resize'));
     ctx.activeAnnotationId=annotation.id;this.renderList(ctx);
     if(annotation.rects?.length)await revealRegion(ctx,annotation.page,annotation.rects[0]);
@@ -226,7 +244,7 @@ class StudyEngine {
       if(this.stopped||leaf.view.file?.path!==file.path)return null;
       const old=this.contexts.get(leaf);if(old)this.dispose(old);
       const ctx={leaf,path:file.path,child,pdf,scroll,win:scroll.ownerDocument.defaultView,closed:false,restoring:true,selection:null};
-      this.contexts.set(leaf,ctx);this.panel(ctx);ctx.overlay=new PdfOverlay(this,ctx);
+      this.contexts.set(leaf,ctx);installPdfNavigation(this,ctx);this.panel(ctx);ctx.overlay=new PdfOverlay(this,ctx);
       const changed=()=>{if(!ctx.restoring){this.capture(ctx);clearTimeout(ctx.saveTimer);ctx.saveTimer=setTimeout(()=>this.p.run(()=>this.p.save()).catch(console.error),700);}this.paint(ctx);};
       ctx.changed=changed;scroll.addEventListener('scroll',changed,{passive:true});
       ctx.mouseup=()=>this.selection(ctx);scroll.addEventListener('mouseup',ctx.mouseup);
@@ -304,6 +322,7 @@ class StudyEngine {
   dispose(ctx) {
     ctx.formulaPad?.dispose();ctx.mdOwner?.unload();ctx.mdCache?.clear();ctx.settleObserver?.disconnect();clearTimeout(ctx.settleTimer);ctx.overlay?.dispose();ctx.resizeCleanup?.();clearTimeout(ctx.regionTimer);ctx.scroll.querySelectorAll('.cs-region-focus').forEach(e=>e.remove());this.capture(ctx);ctx.closed=true;clearTimeout(ctx.saveTimer);ctx.observer?.disconnect();
     ctx.scroll.removeEventListener('scroll',ctx.changed);ctx.scroll.removeEventListener('mouseup',ctx.mouseup);ctx.scroll.removeEventListener('keyup',ctx.keyup);
+    if(ctx.navigationClick)ctx.scroll.removeEventListener('click',ctx.navigationClick,true);clearTimeout(ctx.navigationProbe);
     ctx.bus?._off('pagerendered',ctx.rendered);ctx.bus?._off('scalechanging',ctx.changed);
     ctx.panel?.remove();ctx.reopen?.remove();ctx.root?.classList.remove('cw-study-host','cw-study-collapsed');
     ctx.scroll.querySelectorAll('.cw-study-highlights').forEach(e=>e.remove());this.contexts.delete(ctx.leaf);

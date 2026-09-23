@@ -1,4 +1,5 @@
 "use strict";
+const {renderSummaries}=require('./summary-view');
 const {DetailModal}=require('./detail-modal');
 const {el, btn: domBtn}=require('../shared/dom');
 const {budget}=require('./budget');
@@ -6,6 +7,7 @@ const {ItemView, Modal, Notice, setIcon} = require('obsidian');
 const {dueState} = require('./due');
 const {renderMarkdown,markdownOwner} = require('../codex-study/core/markdown-render');
 const {toObsidianMarkdown,changesOnPaste} = require('../codex-study/core/formula-model');
+const TT = require('./timetable-model');
 const {dayKey, focusSnapshot, studySnapshot, heatmapData, taskPresentation, estimateAccuracy, rankTodayTasks} = require('./console-model');
 // 5.3 把六个页内分段提到了顶层，理由是「藏得太深」。6.3 收回去，理由是
 // 那六个目的地的数据量撑不起一个顶层入口——疑问常年 1 条，课程九张卡片里
@@ -18,16 +20,22 @@ const NAV = [
   ['today','今日','sun',['today']],
   ['tasks','行动','check-square',['tasks','projects']],
   ['learn','学习','graduation-cap',['courses','books','questions']],
+  ['summaries','总结笔记','notebook-pen',['summaries']],
   ['knowledge','知识','files',['knowledge','recall']],
   ['review','回顾','flame',['daily','heatmap']],
+  // 课表排在最后而不是紧挨今日：前五项的 Alt+1–5 用了一个多月，插在中间会把
+  // 后面三个键全部挪一位。一个新入口的代价不该由已经练熟的手指来付。
+  ['schedule','课表','calendar-days',['schedule']],
 ];
 // 分段标签。顶层入口的名字是「行动」，进去之后第一段叫「任务清单」——
 // 同一个 id 在两处的措辞不同是故意的：一个回答「去哪」，一个回答「看什么」。
 const LEAF_LABELS = {
   today:'今日', tasks:'行动清单', projects:'大项目',
   courses:'课程', books:'教材', questions:'待解疑问',
+  summaries:'总结笔记',
   knowledge:'笔记库', recall:'间隔复习',
   daily:'每日小结', heatmap:'学习热力',
+  schedule:'课表',
 };
 const LEAVES = NAV.flatMap(([,,,ids]) => ids);
 const PARENT_OF = new Map(NAV.flatMap(([nav,,,ids]) => ids.map(id => [id, nav])));
@@ -35,6 +43,8 @@ const SECTIONS_OF = new Map(NAV.map(([nav,,,ids]) => [nav, ids]));
 /** 顶层入口的 id 也接受：落到它的第一个分段。 */
 const resolveTab = (id) => (SECTIONS_OF.has(id) ? SECTIONS_OF.get(id)[0] : id);
 // 学习页的三个分段直接对应三个 tab，renderStudy 仍按 studyMode 分支。
+// 课表时段的身份。同一门课同一天可以有两节（周一的数学分析），所以要带上开始时间和教室。
+const classKey = (slot) => `${slot.day}-${slot.start}-${slot.course.id}-${slot.room}`;
 const STUDY_TABS = {courses:'courses', books:'books', questions:'questions'};
 // 历史 consoleTab：V5.1 及更早的 study/review，以及 V5.2 的 review + consoleReviewPane。
 const LEGACY_TABS = {study:'courses', review:'recall'};
@@ -122,9 +132,10 @@ class ConsoleView extends ItemView {
     this.registerEvent(this.plugin.app.workspace.on('codex-capture:changed', () => this.refresh().catch(console.error)));
     this.registerEvent(this.plugin.app.workspace.on('codex-focus:changed', () => this.refresh().catch(console.error)));
     this.registerEvent(this.plugin.app.workspace.on('codex-focus:finished', () => this.refresh().catch(console.error)));
+    if(this.plugin.app.metadataCache?.on)this.registerEvent(this.plugin.app.metadataCache.on('changed',file=>{if(this.tab==='summaries'&&file.path.includes('/课堂笔记/'))this.refresh().catch(console.error);}));
     await this.refresh();
   }
-  async onClose() { this.closed = true; ++this.generation; this.plugin.views.delete(this); if(this.quickNotesTimer){clearTimeout(this.quickNotesTimer);await this.plugin.save().catch(console.error);} clearTimeout(this.quickNotesPreviewTimer); this.quickNotesOwner?.unload?.(); for (const mount of this.widgetMounts || []) mount.destroy?.(); this.widgetMounts = []; this.widgetMount = null; clearTimeout(this.searchTimer); clearTimeout(this.blurTimer); }
+  async onClose() { this.summaryCleanup?.();this.summaryCleanup=null; this.closed = true; ++this.generation; this.plugin.views.delete(this); if(this.quickNotesTimer){clearTimeout(this.quickNotesTimer);await this.plugin.save().catch(console.error);} clearTimeout(this.quickNotesPreviewTimer); this.quickNotesOwner?.unload?.(); for (const mount of this.widgetMounts || []) mount.destroy?.(); this.widgetMounts = []; this.widgetMount = null; clearTimeout(this.searchTimer); clearTimeout(this.blurTimer); }
   /**
    * 页头第二行：这一页自己的状态。
    *
@@ -173,6 +184,17 @@ class ConsoleView extends ItemView {
         return dayLabel(this.summaryDay || dayKey());
       case 'heatmap':
         return `本周 ${s.focus?.weekMinutes || 0} 分钟 · 连续 ${s.focus?.streak || 0} 天`;
+      case 'schedule': {
+        const t = s.timetable;
+        if (!t) return '还没有课表';
+        const anchor = TT.addDays(new Date(), 7 * (this.scheduleWeek || 0));
+        const week = TT.weekView(t.slots, anchor);
+        const n = TT.weekNumber(t.slots, anchor);
+        const minutes = week.days.flatMap(d => d.items).reduce((sum, {slot}) => sum + TT.minutes(slot.end) - TT.minutes(slot.start), 0);
+        const [y1, y2] = String(t.meta.academic_year || '').split('-');
+        const term = y1 && y2 ? `${y1}/${y2.slice(2)} 第${['', '一', '二'][Number(t.meta.semester)] || t.meta.semester}学期` : '';
+        return [term, n ? `第 ${n} 周` : '学期外', week.count ? `${week.count} 节课 · ${+(minutes / 60).toFixed(1)} 小时` : '这周没有课'].filter(Boolean).join(' · ');
+      }
       case 'recall': {
         const cards = s.cards || [];
         const due = cards.filter(c => c.due <= now).length;
@@ -264,6 +286,7 @@ class ConsoleView extends ItemView {
   async setTab(id) {
     await this.flushEdits();this.editors.clear();
     this.tab = resolveTab(id); this.query = ''; this.listPage = 0; this.selectedPath = '';
+    this.scheduleWeek = 0; this.scheduleSelected = '';
     this.plugin.data.consoleTab = this.tab;
     await this.plugin.save(); await this.refresh(true);
   }
@@ -284,9 +307,12 @@ class ConsoleView extends ItemView {
     const todayTasks = await capture?.listTasks?.({filter:'today'}) || [];
     const allTasks=await capture?.index?.all?.()||tasks;
     this.focusId=await p.focusSelection?.read?.()||'';
+    // 课表只有今日和课表两页要用。解析结果按修改时间缓存在插件上，这里只是取。
+    const timetable = ['today','schedule'].includes(this.tab)
+      ? await Promise.resolve(p.timetable?.()).catch(error => { console.error(error); return null; }) : null;
     if (request !== this.generation || this.closed) return;
     const files = p.app.vault.getFiles?.() || [];
-    this.snapshot = {allTasks,tasks, todayTasks, stats, files, notes:files.filter(noteFile), focus:focusSnapshot({sessions:p.data.sessions,timer:p.data.timer}), heatmap:heatmapData(p.data.sessions), study:studySnapshot(p.study?.data || {}), cards:this.owner('codex-recall')?.list?.() || []};
+    this.snapshot = {allTasks,tasks, todayTasks, stats, files, notes:files.filter(noteFile), focus:focusSnapshot({sessions:p.data.sessions,timer:p.data.timer}), heatmap:heatmapData(p.data.sessions), study:studySnapshot(p.study?.data || {}), cards:this.owner('codex-recall')?.list?.() || [], timetable};
     this.titleEl.textContent = LEAF_LABELS[this.tab] || '今日';
     this.pageStatusEl.textContent = this.pageStatus();
     const parent = PARENT_OF.get(this.tab);
@@ -295,6 +321,7 @@ class ConsoleView extends ItemView {
     // 今日页的数据刷新复用专注面板，避免拆掉正在播放的圆环与读数。
     const keepFocus = this.tab === 'today' && this.focusPanel?.isConnected && this.focusPanelOwner === this.owner('codex-focus');
     if (!keepFocus) { this.focusPanel = null; this.timerEl = null; }
+    this.summaryCleanup?.();this.summaryCleanup=null;
     this.content.className = `os-content os-page-${this.tab}`; this.content.replaceChildren();this.editors.clear();this.taskRows.clear();this.focusCard=null;
     this.statusEl.textContent = `${stats.open} 项待办 · ${this.snapshot.cards.filter(c => c.due <= Date.now()).length} 篇待复习`;
     if (!capture?.listTasks) this.statusEl.textContent = '行动索引未启用 · 在模块与版本中检查插件';
@@ -303,11 +330,14 @@ class ConsoleView extends ItemView {
       case 'tasks': this.renderTasks(); break;
       case 'courses': case 'books': case 'questions': this.studyMode = STUDY_TABS[this.tab]; this.renderStudy(); break;
       case 'knowledge': this.renderKnowledge(); break;
+      case 'summaries': await renderSummaries(this); break;
       case 'daily': await this.renderDaily(); break;
       case 'heatmap': this.renderHeatmap(); break;
       case 'recall': this.renderRecall(); break;
+      case 'schedule': this.renderSchedule(); break;
       default: this.renderToday();
     }
+    if(request!==this.generation || this.closed)return;
     for (const [key,top] of scroll) { const e = [...this.content.querySelectorAll('[data-scroll]')].find(e => e.dataset.scroll === key); if (e) e.scrollTop = top; }
     this.dirty = false; this.tick();
   }
@@ -433,6 +463,7 @@ class ConsoleView extends ItemView {
     const selectedIndex=projects.findIndex(file=>file.path===selectedPath);if(selectedIndex>=0){select.value=String(selectedIndex);load().catch(e=>new Notice(e.message));}
   }
   renderToday() {
+    this.focusCard = null;
     const mobile = el(this.content,'div','os-mobile-switch');
     for (const [id,label] of [['actions','今日行动'],['focus','专注与阅读']]) btn(mobile,label,()=>{this.mobilePane=id;return this.refresh(true);},this.mobilePane===id?'is-active':'');
     // 三栏：专注与阅读 / 今日要务与统计 / 下一步行动。
@@ -449,8 +480,8 @@ class ConsoleView extends ItemView {
 
     const intentCol = el(layout,'div','os-today-col is-intent');
     const intent = el(intentCol,'section','os-intent');
-    el(intent,'p','os-overline','今日要务');
-    this.renderFocusWidget(intent);
+    el(intent,'p','os-overline','今日课程');
+    this.renderCourseIntent(intent);
     this.renderStats(intentCol);
     this.renderQuickNotes(intentCol);
     // 排序里加了课程紧迫度：考试临近、本周没碰过的课，它的任务排到前面。
@@ -463,6 +494,7 @@ class ConsoleView extends ItemView {
       currentTask: this.plugin.data.timer?.task || '',
     });
     const actionCol = el(layout,'div','os-today-col is-actions');
+    this.renderTodayClasses(actionCol);
     const action = this.panel(actionCol,'下一步行动','按紧迫度排序：逾期、今天截止、考试临近的课','os-grow');
     btn(action.tools,'全部行动 →',()=>this.setTab('tasks'),'os-quiet');
     if (!this.snapshot.todayTasks.length) {
@@ -470,6 +502,23 @@ class ConsoleView extends ItemView {
       btn(action.body,'安排一个行动',()=>this.plugin.captureTask(),'os-primary');
     }
     for (const task of ranked) this.taskRow(action.body,task,true);
+  }
+  renderCourseIntent(parent) {
+    const timetable = this.snapshot.timetable;
+    const agenda = timetable ? TT.todayAgenda(timetable.slots, new Date()) : [];
+    if (!agenda.length) {
+      el(parent,'p','os-course-intent-empty',timetable?'今天没有课':'尚未关联课表');
+      btn(parent,'查看课表 →',()=>this.setTab('schedule'),'os-quiet');
+      return;
+    }
+    const current = agenda.find(item=>item.state==='now') || agenda.find(item=>item.state==='next') || agenda.find(item=>item.state==='later') || agenda.at(-1);
+    const course = current.slot.course;
+    const distinct = new Set(agenda.map(item=>item.slot.course.id));
+    el(parent,'strong','os-course-intent-title',course.title);
+    el(parent,'p','os-course-intent-meta',`${current.slot.start}–${current.slot.end} · ${current.slot.room}${distinct.size>1?` · 今天共 ${distinct.size} 门课`:''}`);
+    const actions = el(parent,'div','os-course-intent-actions');
+    btn(actions,'课程笔记 →',()=>this.plugin.openCourse(course),'os-quiet');
+    btn(actions,'打开教材',()=>this.plugin.startCourse(course),'os-quiet');
   }
   /**
    * 统计数据。三块读数加一张近 12 周的热力图。
@@ -531,6 +580,231 @@ class ConsoleView extends ItemView {
       }
       btn(resume.body,'打开教材 ↗',()=>this.plugin.openLastTextbook(),'os-quiet');
     } else {el(resume.body,'p','os-muted','从课程或教材库开始，阅读位置会保存在这里。');btn(resume.body,'选择教材',()=>this.setTab('books'),'os-quiet');}
+  }
+  /**
+   * 今日页「今天的课」。放在行动栏最上面：它和「下一步行动」回答的是同一个问题
+   * （接下来做什么），只是一个由课表定、一个由自己定。
+   * 没课的日子只剩一行，告诉你下一节在什么时候——不画一张空卡。
+   */
+  renderTodayClasses(parent) {
+    this.todayClasses = null;
+    const t = this.snapshot.timetable;
+    if (!t) return;
+    const card = this.panel(parent,'今天的课','','os-today-classes');
+    btn(card.tools,'课表 →',()=>this.setTab('schedule'),'os-quiet');
+    this.todayClasses = {card, t, colors:TT.palette(t.slots)};
+    this.paintTodayClasses();
+  }
+  paintTodayClasses() {
+    const state = this.todayClasses;
+    if (!state?.card.panel.isConnected) return;
+    const {card, t, colors} = state, now = new Date();
+    const agenda = TT.todayAgenda(t.slots, now);
+    card.body.replaceChildren();
+    card.panel.classList.toggle('is-empty', !agenda.length);
+    if (!agenda.length) {
+      const next = TT.nextClass(t.slots, now);
+      el(card.body,'p','os-class-none', next ? `今天没有课 · 下一节 ${TT.relative(next)} · ${next.slot.course.title}` : '今天没有课');
+      return;
+    }
+    for (const {slot, state: when, startsIn, endsIn} of agenda) {
+      // 点一行进这门课今天的课堂笔记（没有就建）。去课表的入口在卡头的「课表 →」。
+      const row = btn(card.body,'',()=>this.plugin.openClassNote(slot.course),`os-class-row is-${when} is-c${colors.get(slot.course.id)}`);
+      row.title = '打开今天的课堂笔记';
+      const time = el(row,'span','os-class-row-time');
+      el(time,'strong','',slot.start); el(time,'span','',slot.end);
+      const main = el(row,'span','os-class-row-main');
+      el(main,'strong','',slot.course.title);
+      el(main,'span','',[slot.room, t.rooms[slot.room]?.address.split(' · ')[0]].filter(Boolean).join(' · '));
+      if (when === 'now') el(row,'span','os-chip',`进行中 · 还剩 ${endsIn} 分`);
+      else if (when === 'next') el(row,'span','os-chip is-warm',startsIn < 60 ? `${startsIn} 分钟后` : '下一节');
+      row.setAttribute('aria-label',`${slot.start} 到 ${slot.end}，${slot.course.title}，教室 ${slot.room}${when==='done'?'，已结束':''}，打开课堂笔记`);
+    }
+  }
+  /**
+   * 课表页：左边一周的时间网格，右边「正在上 / 下一节」和本学期课程。
+   *
+   * 网格按分钟定位、按面板高度伸缩（每小时至少 40px，再矮就滚），
+   * 互相重叠的课并排成几列而不是叠在一起——官方课表里本来就有重叠，
+   * 画成叠在一起等于藏掉其中一节。
+   */
+  renderSchedule() {
+    this.nowLine = null; this.classFocus = null;
+    const t = this.snapshot.timetable;
+    if (!t) {
+      const card = this.panel(this.content,'还没有课表','','os-grow');
+      this.empty(card.body,'库里还没有课表笔记','新建一篇笔记，frontmatter 写 type: timetable，正文放一张「星期 | 时间 | 课程 | 教室 | 起始日期 | 结束日期」的表格。改表格就是改课表。');
+      return;
+    }
+    const now = new Date();
+    this.scheduleWeek ||= 0;
+    const anchor = TT.addDays(now, 7 * this.scheduleWeek);
+    const week = TT.weekView(t.slots, anchor);
+    const number = TT.weekNumber(t.slots, anchor);
+    const colors = TT.palette(t.slots);
+    const clashes = TT.conflicts(t.slots);
+    const clashed = new Set(clashes.flatMap(c => [classKey(c.a), classKey(c.b)]));
+    const layout = el(this.content,'div','os-schedule');
+
+    const first = week.days[0].date, last = week.days[week.days.length - 1].date;
+    const range = first.getMonth() === last.getMonth()
+      ? `${first.getMonth()+1} 月 ${first.getDate()}–${last.getDate()} 日`
+      : `${first.getMonth()+1} 月 ${first.getDate()} 日 – ${last.getMonth()+1} 月 ${last.getDate()} 日`;
+    const board = this.panel(layout, number ? `第 ${number} 周` : '学期外', range, 'os-schedule-board');
+    const step = (label, aria, offset) => { const b = btn(board.tools,label,()=>this.shiftWeek(offset),'os-quiet os-week-step'); b.setAttribute('aria-label',aria); return b; };
+    step('‹','上一周',-1);
+    const home = btn(board.tools,'本周',()=>this.shiftWeek(0),'os-quiet'); home.disabled = this.scheduleWeek === 0;
+    step('›','下一周',1);
+
+    const {first: h0, last: h1} = TT.hourRange(t.slots);
+    const span = (h1 - h0) * 60;
+    const grid = el(board.body,'div','os-week');
+    grid.style.setProperty('--days', String(week.days.length));
+    grid.style.setProperty('--hours', String(h1 - h0));
+    el(grid,'span','os-week-corner');
+    const todayKey = TT.keyOf(now);
+    for (const day of week.days) {
+      const head = el(grid,'div',`os-week-head${day.key === todayKey ? ' is-today' : ''}`);
+      el(head,'span','os-week-weekday',day.label);
+      el(head,'strong','os-week-date',String(day.date.getDate()));
+    }
+    const axis = el(grid,'div','os-week-axis');
+    for (let h = h0; h <= h1; h++) el(axis,'span','os-week-hour',`${String(h).padStart(2,'0')}:00`).style.top = `${(h - h0) / (h1 - h0) * 100}%`;
+    for (const day of week.days) {
+      const col = el(grid,'div',`os-week-col${day.key === todayKey ? ' is-today' : ''}`);
+      col.setAttribute('aria-label',`${day.label} ${day.items.length} 节课`);
+      for (const {slot, lane, lanes} of day.items) {
+        const key = classKey(slot);
+        const block = btn(col,'',()=>this.selectClass(key),`os-class is-c${colors.get(slot.course.id)}`);
+        block.dataset.key = key;
+        block.style.top = `${(TT.minutes(slot.start) - h0 * 60) / span * 100}%`;
+        block.style.height = `${(TT.minutes(slot.end) - TT.minutes(slot.start)) / span * 100}%`;
+        block.style.left = `calc(${lane / lanes * 100}% + 2px)`;
+        block.style.width = `calc(${100 / lanes}% - 4px)`;
+        block.classList.toggle('is-narrow', lanes > 1);
+        block.classList.toggle('is-selected', key === this.scheduleSelected);
+        block.classList.toggle('is-clash', clashed.has(key));
+        el(block,'strong','os-class-title',slot.course.title);
+        el(block,'span','os-class-meta',`${slot.start}–${slot.end}`);
+        el(block,'span','os-class-meta',slot.room);
+        block.setAttribute('aria-label',`${day.label} ${slot.start} 到 ${slot.end}，${slot.course.title}，教室 ${slot.room}`);
+        block.setAttribute('aria-pressed', String(key === this.scheduleSelected));
+      }
+      if (day.key === todayKey) { this.nowLine = el(col,'i','os-now-line'); this.nowLine.setAttribute('aria-hidden','true'); this.nowRange = [h0, h1]; }
+    }
+    if (!week.count) {
+      const note = el(board.body,'p','os-week-empty', number ? '这周没有课。' : `这周在学期之外。本学期到 ${t.semesterEnd || '期末'}，点「本周」回到今天。`);
+      note.setAttribute('role','status');
+    }
+    this.paintNowLine();
+
+    const side = el(layout,'div','os-schedule-side');
+    const focusHost = el(side,'div','os-class-focus-host');
+    this.classFocus = {host: focusHost, t, colors, clashes};
+    this.paintClassFocus();
+    this.renderCourseKey(side, t, colors, clashes);
+  }
+  shiftWeek(offset) {
+    this.scheduleWeek = offset === 0 ? 0 : (this.scheduleWeek || 0) + offset;
+    this.scheduleSelected = '';
+    return this.refresh(true);
+  }
+  selectClass(key) {
+    this.scheduleSelected = this.scheduleSelected === key ? '' : key;
+    // 只换选中态和右边那张卡，不重建整页：网格里十几块课，重建一次闪一下。
+    for (const block of this.content.querySelectorAll('.os-class')) {
+      const on = block.dataset.key === this.scheduleSelected;
+      block.classList.toggle('is-selected', on);
+      block.setAttribute('aria-pressed', String(on));
+    }
+    this.paintClassFocus();
+  }
+  /** 此刻线：只画在今天那一列，只在时间轴范围之内。 */
+  paintNowLine() {
+    const line = this.nowLine;
+    if (!line?.isConnected) return;
+    const [h0, h1] = this.nowRange, now = new Date();
+    const at = (now.getHours() * 60 + now.getMinutes() - h0 * 60) / ((h1 - h0) * 60);
+    line.hidden = at < 0 || at > 1;
+    line.style.top = `${(Math.max(0, Math.min(1, at)) * 100).toFixed(2)}%`;
+  }
+  /**
+   * 右上那张卡。默认回答「现在该去哪」：正在上的那节，否则下一节。
+   * 点了网格里的某一节，就换成那一节；再点一次（或点「回到下一节」）换回来。
+   */
+  paintClassFocus() {
+    const state = this.classFocus;
+    if (!state?.host.isConnected) return;
+    const {host, t, colors, clashes} = state, now = new Date();
+    let slot = t.slots.find(s => classKey(s) === this.scheduleSelected), overline = '所选时段', picked = !!slot;
+    if (!slot) {
+      const current = TT.todayAgenda(t.slots, now).find(a => a.state === 'now');
+      const next = TT.nextClass(t.slots, now);
+      if (current) { slot = current.slot; overline = `正在上 · 还剩 ${current.endsIn} 分钟`; }
+      else if (next) { slot = next.slot; overline = `下一节 · ${TT.relative(next)}`; }
+    }
+    host.replaceChildren();
+    if (!slot) { const card = this.panel(host,'接下来没有课','','os-class-focus'); el(card.body,'p','os-muted',`本学期的课到 ${t.semesterEnd || '期末'} 为止。`); return; }
+    const card = this.panel(host, slot.course.title, overline, `os-class-focus is-c${colors.get(slot.course.id)}`);
+    const time = el(card.body,'div','os-class-time');
+    el(time,'strong','',slot.start);
+    el(time,'span','',`– ${slot.end} · ${TT.WEEKDAY_LABELS[slot.day]}`);
+    const place = t.rooms[slot.room] || {};
+    const where = el(card.body,'dl','os-class-facts');
+    const fact = (term, value) => { if (!value) return; el(where,'dt','',term); el(where,'dd','',value); };
+    // 地址是「街道 · 楼栋」，拆成两行：找教室时先认楼栋和楼层，街道是去校区时才看的。
+    const [street, ...building] = String(place.address || '').split(' · ');
+    fact('教室', slot.room);
+    fact('楼栋', [building.join(' · '), place.floor].filter(Boolean).join(' · '));
+    fact('地址', street);
+    fact('教师', t.courses[slot.course.id]?.teacher);
+    const notes = el(card.body,'div','os-chip-row');
+    if (slot.doubtful) el(notes,'span','os-chip is-warm',`官方结束日期 ${slot.officialTo} · 待核实`);
+    for (const c of clashes.filter(c => c.a === slot || c.b === slot)) {
+      const other = c.a === slot ? c.b : c.a;
+      el(notes,'span','os-chip is-alert',`与${other.course.title}重叠 ${c.start}–${c.end}`);
+    }
+    if (!notes.childElementCount) notes.remove();
+    const actions = el(card.body,'div','os-class-actions');
+    const catalog = (this.plugin.courseCatalog?.() || []).find(c => c.id === slot.course.id);
+    if (slot.course.link) btn(actions,'课程笔记',()=>this.plugin.open(`${slot.course.link}.md`),'os-quiet');
+    if (catalog) btn(actions,'开始学习',()=>this.plugin.startCourse(catalog),'os-primary');
+    if (picked) btn(card.tools,'回到下一节',()=>this.selectClass(this.scheduleSelected),'os-quiet');
+  }
+  /** 本学期课程：色标、每周几节几小时。点一行打开那门课的笔记。 */
+  renderCourseKey(parent, t, colors, clashes) {
+    const byCourse = new Map();
+    for (const slot of t.slots) {
+      const entry = byCourse.get(slot.course.id) || {course: slot.course, count: 0, minutes: 0};
+      entry.count++; entry.minutes += TT.minutes(slot.end) - TT.minutes(slot.start);
+      byCourse.set(slot.course.id, entry);
+    }
+    const total = [...byCourse.values()].reduce((sum, e) => sum + e.minutes, 0);
+    const card = this.panel(parent,'本学期课程',`${byCourse.size} 门 · 每周 ${+(total / 60).toFixed(1)} 小时`,'os-course-key');
+    const list = el(card.body,'div','os-course-key-list');
+    for (const entry of [...byCourse.values()].sort((a, b) => colors.get(a.course.id) - colors.get(b.course.id))) {
+      const row = btn(list,'',()=>entry.course.link && this.plugin.open(`${entry.course.link}.md`),`os-course-key-row is-c${colors.get(entry.course.id)}`);
+      el(row,'i','os-course-swatch');
+      el(row,'strong','',entry.course.title);
+      el(row,'span','',`${entry.count} 节 · ${+(entry.minutes / 60).toFixed(1)} 小时`);
+    }
+    // 隐藏的课不画进网格，但在这里留一行：不然它就是悄悄少了一门，过两周连自己都忘了为什么。
+    const hidden = new Map((t.hiddenSlots || []).map(s => [s.course.id, s.course]));
+    for (const course of hidden.values()) {
+      const row = btn(list,'',()=>course.link && this.plugin.open(`${course.link}.md`),'os-course-key-row is-hidden');
+      el(row,'i','os-course-swatch');
+      el(row,'strong','',course.title);
+      el(row,'span','','不上课 · 已隐藏');
+      row.title = '课表笔记 frontmatter 的 hidden_courses 里列着它';
+    }
+    const foot = el(card.body,'div','os-course-key-foot');
+    const pills = el(foot,'div','os-chip-row');
+    if (clashes.length) el(pills,'span','os-chip is-alert',`官方课表有 ${clashes.length} 处重叠`);
+    const doubtful = new Set(t.slots.filter(s => s.doubtful).map(s => s.course.title));
+    if (doubtful.size) el(pills,'span','os-chip is-warm',`${[...doubtful].join('、')}结束日期待核实`);
+    if (t.skipped?.length) el(pills,'span','os-chip is-alert',`${t.skipped.length} 行没读懂`);
+    if (!pills.childElementCount) pills.remove();
+    btn(foot,'打开课表笔记 ↗',()=>this.plugin.open(t.path),'os-quiet');
   }
   /** 学习中随手记，不切页、不碰当前番茄钟；归档时才写今日日记。 */
   renderQuickNotes(parent) {
@@ -747,7 +1021,9 @@ class ConsoleView extends ItemView {
   async openFocusPicker() {
     if (this.tab !== 'today') { await this.setTab('today'); }
     const picker = this.content.querySelector('.os-focus-picker');
-    if (!picker) return;
+    // 7.1 起今日页中间是「今日课程」，那张带选择器的「今日要务」卡不在了——
+    // 原来这里静默 return，点绑定条什么都不发生。要务在行动页的任务行上设。
+    if (!picker) { await this.setTab('tasks'); new Notice('在任务行上点「设为今日要务」。'); return; }
     picker.open = true;
     picker.scrollIntoView({block:'nearest'});
     picker.querySelector('select')?.focus();
@@ -757,6 +1033,10 @@ class ConsoleView extends ItemView {
     for(const task of this.taskRows.keys())this.paintTask(task);this.paintFocus();
     const today=dayKey();
     if(this.lastDay&&this.lastDay!==today)this.refresh().catch(console.error);
+    // 课表按分钟走：「进行中 / 下一节」和那条此刻线。只在分钟变了时动，
+    // 不在每秒那一拍上重画——这一拍还喂着番茄钟。
+    const minute=Math.floor(Date.now()/60000);
+    if(minute!==this.scheduleMinute){this.scheduleMinute=minute;this.paintTodayClasses();this.paintClassFocus();this.paintNowLine();}
     this.lastDay=today;
     if (!this.timerEl || this.closed) return;
     const p=this.plugin,t=p.data.timer;
@@ -795,14 +1075,21 @@ class ConsoleView extends ItemView {
     btn(panel.tools,'新建 / 管理项目',()=>this.openProjectManager(),'os-quiet');
     for(const file of this.snapshot.files.filter(f=>f.extension==='md'&&f.path.startsWith('02 项目/')&&f.path!=='02 项目/项目导航.md')){
       const card=el(panel.body,'section','os-project-container');el(card,'h2','os-project-title',file.basename);
-      btn(card,'打开项目笔记',()=>this.plugin.open(file.path),'os-quiet');
-      btn(card,'编辑项目',()=>this.openProjectManager(file.path),'os-quiet');
+      // 四个动作收成一行：「添加子任务」是这张卡最常用的那个，给实底；
+      // 「删除项目」推到最右，和其余三个隔开——破坏性动作不与普通动作同排同级。
+      const actions=el(card,'div','os-project-actions');
+      btn(actions,'＋ 添加子任务',()=>this.owner('codex-capture').captureTask({project:file.path,scheduled:'backlog'}),'os-primary');
+      btn(actions,'打开项目笔记',()=>this.plugin.open(file.path));
+      btn(actions,'编辑项目',()=>this.openProjectManager(file.path));
+      btn(actions,'删除项目',()=>this.deleteProject(file),'os-quiet os-danger os-project-delete');
       const tasks=this.snapshot.allTasks.filter(t=>!t.deleted&&(t.project===file.path||t.project===file.basename||!t.project&&t.path===file.path));
-      btn(card,'＋ 添加子任务',()=>this.owner('codex-capture').captureTask({project:file.path,scheduled:'backlog'}),'os-quiet');
-      btn(card,'删除项目',()=>this.deleteProject(file),'os-quiet os-danger');
       const unassigned=this.snapshot.allTasks.filter(t=>!t.done&&!t.deleted&&!t.project&&!t.path.startsWith('02 项目/'));
       const attach=el(card,'select','os-input');el(attach,'option','','挂载已有独立任务').value='';unassigned.forEach((t,i)=>el(attach,'option','',t.text).value=String(i));attach.onchange=async()=>{if(attach.value==='')return;try{await this.owner('codex-capture').patchTask(unassigned[Number(attach.value)],{project:file.path});await this.refresh(true);}catch(e){new Notice(e.message);}};
-      el(card,'p','os-muted',`${tasks.filter(t=>t.done).length} / ${tasks.length} 子任务完成`);
+      // 每日小结里同样的「完成多少」有进度条，这里原来只有一行字。
+      const done=tasks.filter(t=>t.done).length;
+      const progress=el(card,'div','os-project-progress');
+      el(progress,'span','',`${done} / ${tasks.length} 子任务完成`);
+      const track=el(progress,'div','os-read-track');el(track,'span','os-read-fill').style.width=`${tasks.length?(done/tasks.length*100).toFixed(1):0}%`;
       for(const task of tasks)this.taskRow(card,task,false,{showProject:false});
     }
   }
@@ -864,7 +1151,8 @@ class ConsoleView extends ItemView {
           const state=this.plugin.courseStateFor(c),books=this.plugin.courseBooksFor(c),stats=this.plugin.courseStatsFor(c);
           const card=el(grid,'article','os-course');el(card,'p','os-overline',`${c.id} · 第 ${c.semester} 学期 · ${c.credits} 学分`);el(card,'h3','',c.title);
           el(card,'p','os-course-next',state.next||'写下这门课的下一步');
-          const meta=el(card,'div','os-row-meta');el(meta,'span','',`${books.length} 份教材`);el(meta,'span','',`${stats.minutes} 分钟 / 本周`);if(state.exam)el(meta,'span','','考试 '+state.exam);
+          // 元数据做成药丸：原来是一行跑字「1 份教材 50 分钟 / 本周 考试 2026-12-22」，三件事粘在一起分不开。
+          const meta=el(card,'div','os-row-meta');el(meta,'span','os-chip',`${books.length} 份教材`);el(meta,'span','os-chip',`本周 ${stats.minutes} 分钟`);if(state.exam)el(meta,'span','os-chip is-warm','考试 '+state.exam);
           const actions=el(card,'div','os-course-actions');btn(actions,books.length?'打开教材':'关联教材',()=>this.plugin.startCourse(c),'os-primary');
           btn(actions,'笔记',()=>this.plugin.openCourse(c),'os-quiet');btn(actions,'设置',()=>this.plugin.configureCourse(c),'os-quiet');
         }
@@ -904,7 +1192,7 @@ class ConsoleView extends ItemView {
     for (const label of ['一','','三','','五','','日']) el(weekdays,'span','',label);
     const chartWrap = el(heatmapLine,'div','os-heatmap-chart-wrap');
     const months = el(chartWrap,'div','os-heatmap-months');
-    months.style.gridTemplateColumns = `repeat(${heat.weeks}, minmax(0, 1fr))`;
+    months.style.gridTemplateColumns = `repeat(${heat.weeks}, var(--heat-cell))`;
     let previousMonth = '';
     for (let week = 0; week < heat.weeks; week++) {
       const first = heat.days[week * 7];
@@ -913,7 +1201,7 @@ class ConsoleView extends ItemView {
       el(months,'span','',label); previousMonth = month;
     }
     const grid = el(chartWrap,'div','os-heatmap-grid');
-    grid.style.gridTemplateColumns = `repeat(${heat.weeks}, minmax(0, 1fr))`;
+    grid.style.gridTemplateColumns = `repeat(${heat.weeks}, var(--heat-cell))`;
     for (const [index, day] of heat.days.entries()) {
       const cell = btn(grid,'',()=>{this.heatmapDay=day.key;return this.refresh(true);},`os-heatmap-cell os-heat-level-${day.level}${day.key===selected.key?' is-selected':''}`);
       cell.style.gridColumn = String(Math.floor(index / 7) + 1); cell.style.gridRow = String(index % 7 + 1);

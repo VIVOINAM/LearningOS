@@ -1,0 +1,224 @@
+/* 课堂笔记阅读（7.3）。只作用于课堂笔记：宿主 .lr-host 由 reading-rail.js 挂上，排版走 cssclasses: class-note。
+ *
+ * 栏本身没有底——它和正文是同一张纸，靠留白分开，不靠一张卡。唯一有底的是题图卡，
+ * 而它只在有东西可看时出现。上一稿整栏是一块玻璃大卡，里面再摆两个小标题和一个空框，
+ * 白纸上的玻璃只剩一圈阴影，读起来是「旁边还有一个窗口」，不是「这本笔记的目录」。 */
+
+/* ---- 版式：正文一列、栏贴右边 ------------------------------------------ */
+
+.workspace-leaf-content[data-type="markdown"] .view-content.lr-host {
+  --lr-measure: 760px;
+  display: grid !important;
+  grid-template-columns: minmax(0, 1fr) var(--lr-width, 340px);
+  grid-template-rows: minmax(0, 1fr);
+  position: relative;
+  overflow: hidden;
+}
+.lr-host > :not(.lr-rail, .lr-reopen, .lr-pin-float) { grid-column: 1; grid-row: 1; min-width: 0; min-height: 0; }
+/* 库里关了「可读行宽」，这里单独给课堂笔记一个行宽：中文一行 40 字上下，两种模式同一个宽度。 */
+.lr-host :is(.markdown-preview-sizer, .cm-sizer) { max-width: var(--lr-measure) !important; margin-inline: auto !important; }
+.lr-host .markdown-preview-view img { max-width: 100%; height: auto; }
+.lr-host .markdown-preview-view :is(table, pre, .math-block) { max-width: 100%; overflow-x: auto; }
+/* 工作台给每篇笔记挂的「返回工作台」浮钮压在栏的右下角；状态栏里有同一个入口。 */
+.lr-leaf .os-floating-return { display: none; }
+
+.workspace-leaf-content[data-type="markdown"] .view-content.lr-host.lr-collapsed,
+.workspace-leaf-content[data-type="markdown"] .view-content.lr-host.lr-compact { grid-template-columns: minmax(0, 1fr); }
+.lr-host.lr-collapsed > .lr-rail { display: none; }
+
+/* ---- 栏 ------------------------------------------------------------------ */
+
+.lr-rail {
+  grid-column: 2; grid-row: 1;
+  position: relative;
+  display: flex; flex-direction: column; gap: 12px;
+  min-width: 0; min-height: 0;
+  padding: 20px 18px 18px 6px;
+  font-family: var(--os-text); font-size: 13px; color: var(--os-body);
+}
+.lr-card[hidden], .lr-hint[hidden], .lr-host .lr-reopen[hidden], .lr-host .lr-pin-float[hidden] { display: none !important; }
+
+.lr-bar { display: flex; align-items: center; justify-content: space-between; gap: 8px; flex: none; min-height: 28px; padding-left: 14px; }
+.lr-bar-title { font-size: 12px; font-weight: 600; letter-spacing: .04em; color: var(--os-muted); }
+.lr-bar-tools { display: flex; gap: 2px; }
+
+.lr-host .lr-icon, .lr-card .lr-icon {
+  display: inline-grid; place-items: center; flex: none;
+  width: 28px; height: 28px; padding: 0; margin: 0;
+  border: 0; border-radius: var(--os-r-pill); background: transparent; box-shadow: none;
+  color: var(--os-muted); cursor: pointer;
+  transition: background-color .18s var(--os-ease), color .18s var(--os-ease);
+}
+.lr-host .lr-icon:hover { background: var(--os-fill); color: var(--os-ink); }
+.lr-host .lr-icon[aria-pressed="true"] { color: var(--os-accent); }
+.lr-host .lr-icon svg { width: 16px; height: 16px; stroke-width: 1.8; }
+.lr-host :is(.lr-icon, .lr-heading, .lr-pin-float):focus-visible,
+.lr-resizer:focus-visible { outline: 2px solid var(--os-accent); outline-offset: 1px; }
+
+/* 目录：左边一道细轨，当前章节在轨上亮一段系统蓝。和 iOS 设置、Apple 文档的「本页」同一路。 */
+.lr-outline {
+  position: relative;
+  flex: 0 1 auto; min-height: 0;
+  margin-left: 14px;
+  overflow-y: auto; overscroll-behavior: contain; scrollbar-width: thin;
+  box-shadow: inset 1.5px 0 var(--os-glass-shade);
+}
+.lr-row { position: relative; display: flex; align-items: flex-start; padding-left: calc(var(--lr-depth, 0) * 14px); }
+.lr-row::before {
+  content: ""; position: absolute; left: 0; top: 5px; bottom: 5px; width: 2px; border-radius: 2px;
+  background: transparent; transition: background-color .22s var(--os-ease);
+}
+.lr-row.is-active::before { background: var(--os-accent); }
+.lr-host .lr-heading {
+  flex: 1; min-width: 0; display: block; height: auto; margin: 0;
+  padding: 5px 8px 5px 14px;
+  border: 0; border-radius: 8px; background: transparent; box-shadow: none;
+  font: inherit; font-size: 13px; line-height: 1.45; text-align: left; white-space: normal;
+  color: var(--os-body); cursor: pointer;
+  transition: color .18s var(--os-ease), background-color .18s var(--os-ease);
+}
+.lr-heading > span { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; overflow-wrap: anywhere; }
+.lr-row.is-top .lr-heading { color: var(--os-ink); font-weight: 600; }
+.lr-host .lr-heading:hover { background: var(--os-fill); color: var(--os-ink); }
+.lr-host .lr-row.is-active .lr-heading { color: var(--os-accent); font-weight: 600; }
+.lr-host .lr-fold { width: 22px; height: 22px; margin-top: 3px; opacity: 0; }
+.lr-host .lr-fold svg { width: 14px; height: 14px; transition: transform .2s var(--os-ease); }
+.lr-row:hover .lr-fold, .lr-row.is-folded .lr-fold, .lr-host .lr-fold:focus-visible { opacity: 1; }
+.lr-row.is-folded .lr-fold svg { transform: rotate(-90deg); }
+
+/* 题图卡：嵌进去的一块（填充底、没有描边、卡内块圆角 14），紧跟在目录下面。
+   不放在目录上面：它随滚动出现、消失，放在上面会把目录整列推来推去。
+   也不沉到栏底：第一版贴底，图落在屏幕右下角，离读的那一行最远。 */
+.lr-card {
+  flex: 0 1 auto; min-height: 0; max-height: 66%;
+  margin-top: 6px;
+  display: flex; flex-direction: column; gap: 8px;
+  padding: 8px 8px 10px;
+  border-radius: var(--os-r-inner);
+  background: var(--os-fill);
+}
+.lr-card.is-entering { animation: lr-in .3s var(--os-ease); }
+@keyframes lr-in { from { opacity: 0; transform: translateY(8px); } }
+.lr-card-head { display: flex; align-items: flex-start; gap: 4px; flex: none; }
+.lr-card-caption { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 1px; padding: 5px 0 0 6px; }
+.lr-card-kind { font-size: 12px; font-weight: 600; color: var(--os-ink); }
+.lr-card-context { font-size: 12px; color: var(--os-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.lr-card-context[hidden] { display: none; }
+.lr-card-tools { display: flex; flex: none; }
+.lr-card-body {
+  min-height: 0; overflow: auto; overscroll-behavior: contain; scrollbar-width: thin;
+  padding: 0 4px;
+  font-size: 14px; line-height: 1.7; color: var(--os-ink); overflow-wrap: anywhere;
+}
+.lr-card-body > :first-child, .lr-card-body p:first-child { margin-top: 0; }
+.lr-card-body > :last-child, .lr-card-body p:last-child { margin-bottom: 0; }
+.lr-card-body img { display: block; width: 100%; max-width: 100%; height: auto; margin: 0; border-radius: 10px; background: #FFFFFF; cursor: zoom-in; }
+.lr-card-body :is(table, pre, .math-block, mjx-container) { max-width: 100%; overflow-x: auto; }
+/* 栏只有 340 宽，三列表格按比例分下来一列不到三个字，每格竖着折成一字一行。
+   给每格一个下限，放不下就在卡里横向滚。 */
+.lr-card-body table { display: block; font-size: 12.5px; line-height: 1.55; }
+.lr-card-body :is(th, td) { min-width: 6em; padding: 4px 8px; vertical-align: top; }
+.lr-card-body .callout { margin: 0; }
+.lr-card-body.is-raw { white-space: pre-wrap; }
+
+.lr-hint { flex: none; margin: 6px 0 0 14px; font-size: 12px; line-height: 1.65; color: var(--os-muted); }
+.lr-outline .lr-hint { margin: 4px 0 0 14px; }
+
+/* 拖栏宽：平时看不见，悬停时一道蓝线。触控拖拽必须关掉浏览器的平移判定。 */
+.lr-resizer { position: absolute; left: -5px; top: 0; bottom: 0; width: 10px; cursor: col-resize; touch-action: none; z-index: 2; }
+.lr-resizer::after { content: ""; position: absolute; left: 4.5px; top: 18px; bottom: 18px; width: 1px; background: transparent; transition: background-color .2s var(--os-ease); }
+.lr-resizer:hover::after, .lr-resizer:focus-visible::after { background: var(--os-accent); }
+
+.lr-host .lr-reopen { position: absolute; top: 12px; right: 14px; z-index: 6; }
+
+/* 悬停「钉住」：浮在图 / 公式 / 表格右上角的一枚玻璃胶囊。 */
+.lr-host .lr-pin-float {
+  /* 层级给足：编辑模式下悬停的表格会被 Obsidian 抬高一层，按下那一刻命中的是表格单元格，
+     而点进表格，Obsidian 会把整张表按列宽补齐空格重写。 */
+  position: absolute; z-index: 40; transform: translateX(-100%);
+  display: inline-flex; align-items: center; gap: 4px;
+  height: 28px; padding: 0 12px 0 9px; margin: 0;
+  border: 0; border-radius: var(--os-r-pill);
+  background: color-mix(in srgb, var(--os-paper) 90%, transparent);
+  -webkit-backdrop-filter: blur(20px) saturate(180%); backdrop-filter: blur(20px) saturate(180%);
+  box-shadow: var(--os-glass-edge);
+  font: 600 12px/1 var(--os-text); color: var(--os-accent); cursor: pointer;
+  animation: lr-pop .16s var(--os-ease);
+}
+.lr-host .lr-pin-float svg { width: 14px; height: 14px; }
+.lr-host .lr-pin-float:hover { background: var(--os-accent); color: var(--os-accent-ink); }
+@keyframes lr-pop { from { opacity: 0; transform: translateX(-100%) scale(.92); } }
+
+/* 窄窗口：栏变成一张浮起来的玻璃抽屉，从右上角的按钮拉出来。 */
+.lr-host.lr-compact > .lr-rail {
+  position: absolute; grid-column: auto; grid-row: auto;
+  top: 10px; right: 10px; bottom: 10px; width: min(360px, calc(100% - 20px)); z-index: 8;
+  padding: 14px 12px 14px 4px;
+  border-radius: var(--os-r-card);
+  background: color-mix(in srgb, var(--os-paper) 96%, transparent);
+  -webkit-backdrop-filter: blur(30px) saturate(180%); backdrop-filter: blur(30px) saturate(180%);
+  box-shadow: var(--os-glass-edge), 0 24px 60px rgba(0, 0, 0, .18);
+  animation: lr-in .26s var(--os-ease);
+}
+.lr-compact .lr-resizer { display: none; }
+
+/* ---- 沉浸阅读 ------------------------------------------------------------ */
+/* 功能区、状态栏直接藏；标签栏和页头淡到 0，鼠标移上去才回来——
+   窗口按钮在标签栏那一行，整条藏掉就关不了窗口了。 */
+
+body.lr-immersive .workspace-ribbon.mod-left,
+body.lr-immersive .status-bar { display: none; }
+body.lr-immersive .workspace-tab-header-container,
+body.lr-immersive .lr-leaf .view-header { opacity: 0; transition: opacity .3s var(--os-ease); }
+body.lr-immersive .workspace-tab-header-container:is(:hover, :focus-within),
+body.lr-immersive .lr-leaf .view-header:is(:hover, :focus-within) { opacity: 1; }
+body.lr-immersive .lr-host { --lr-measure: 780px; }
+
+/* ---- 放大查看 ------------------------------------------------------------ */
+
+.modal.lr-figure-modal {
+  width: min(1200px, 94vw); max-width: 94vw; height: min(88vh, 1000px); max-height: 92vh;
+  padding: 18px 22px 22px;
+  border: 0; border-radius: var(--os-r-card);
+  background: var(--os-paper);
+  box-shadow: var(--os-glass-edge), 0 30px 80px rgba(0, 0, 0, .25);
+  font-family: var(--os-text); color: var(--os-ink);
+}
+.lr-figure-modal .modal-content { display: flex; flex-direction: column; gap: 14px; height: 100%; min-height: 0; }
+.lr-figure-modal-head { display: flex; align-items: center; gap: 12px; padding-right: 40px; flex: none; }
+.lr-figure-modal-caption { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.lr-figure-modal-caption strong { font-size: 15px; font-weight: 600; }
+.lr-figure-modal-caption span { font-size: 12px; color: var(--os-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.lr-figure-modal .lr-pill {
+  height: 30px; padding: 0 14px; border: 0; border-radius: var(--os-r-pill);
+  background: var(--os-fill); box-shadow: none; color: var(--os-accent);
+  font: 600 12px var(--os-text); cursor: pointer;
+}
+.lr-figure-modal-body { flex: 1; min-height: 0; overflow: auto; font-size: 16px; line-height: 1.8; }
+.lr-figure-modal-body img { display: block; max-width: 100%; max-height: calc(min(88vh, 1000px) - 110px); height: auto; margin: auto; border-radius: 12px; background: #FFFFFF; }
+.lr-figure-modal.is-original .lr-figure-modal-body img,
+.lr-figure-modal .is-original .lr-figure-modal-body img { max-width: none; max-height: none; }
+
+/* ---- 课堂笔记的排版（阅读与编辑两种模式都吃这组变量） ------------------ */
+
+.class-note {
+  --line-height-normal: 1.8;
+  --h1-size: 1.8em; --h1-weight: 700; --h1-line-height: 1.25;
+  --h2-size: 1.42em; --h2-weight: 700;
+  --h3-size: 1.18em; --h3-weight: 650;
+  --h4-size: 1.04em; --h4-weight: 650;
+  --link-color: var(--os-accent); --link-color-hover: var(--os-accent-hover);
+  --link-external-color: var(--os-accent); --link-external-color-hover: var(--os-accent-hover);
+  --callout-radius: var(--os-r-inner); --callout-padding: 14px 18px; --callout-border-width: 0; --callout-title-weight: 650;
+  --table-header-background: var(--os-fill); --table-header-weight: 600; --table-border-color: var(--os-glass-shade);
+}
+.class-note :is(h1, h2, h3, h4) { letter-spacing: -.01em; }
+.class-note .callout { background-color: rgba(var(--callout-color), .08); border: 0; }
+.markdown-preview-view.class-note table { border-collapse: separate; border-spacing: 0; border-radius: var(--os-r-inner); box-shadow: 0 0 0 1px var(--os-glass-shade); overflow: hidden; font-size: .94em; }
+.markdown-preview-view.class-note :is(th, td) { border: 0; border-bottom: 1px solid var(--os-glass-shade); padding: 8px 14px; }
+.markdown-preview-view.class-note tr:last-child td { border-bottom: 0; }
+.markdown-preview-view.class-note th { text-align: left; }
+
+@media (prefers-reduced-motion: reduce) {
+  .lr-card.is-entering, .lr-host .lr-pin-float, .lr-host.lr-compact > .lr-rail { animation: none; }
+}

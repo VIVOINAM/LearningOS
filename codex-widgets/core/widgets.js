@@ -32,6 +32,13 @@ const clamp = (value, min, max, fallback) => {
 };
 const text = (value) => String(value ?? "").replace(/\s+/g, " ").trim();
 const wallpaperVisibility = (value) => clamp(value, 0, 100, 14);
+/**
+ * 玻璃浓度，0 = 极清透，100 = 全着色（iOS 27 设置里那个滑块）。默认 50，正好落在
+ * 7.0 定下的玻璃浓度上，装上之后什么都不变，拖了才变。
+ * 这里只把百分比换成 0–1；每套主题把它映射到自己的不透明度区间（见 shared/tokens.css），
+ * 区间的下端由 tools/legibility.cjs 在最清透那一档量定。
+ */
+const glassTint = (value) => clamp(value, 0, 100, 50);
 
 /** 合法的 YYYY-MM-DD，并且真的存在这一天（2026-02-30 不算）。 */
 function validDate(value) {
@@ -149,7 +156,7 @@ function wallpaperShift(wallpaper = {}, key = day()) {
  * 挂件区冒出一条滚动条。时段是限定语，不该和读数抢同一行的宽度。
  *
  * 7.0 把十二小时制这个开关也删了，同一个理由的另一面：**补零和时段是一件事**。
- * 时钟用 --os-serif 那支高反差衬线展示号，十二小时制不补零，于是 9:59 跳到
+ * 时钟用 --os-display 那支高反差衬线展示号，十二小时制不补零，于是 9:59 跳到
  * 10:00 的那一刻读数宽一位——196px 的固定左栏、27px 的大字，那是看得见的抖动。
  * 一个读数不该因为到了整点就改变自己占的宽度。
  *
@@ -361,6 +368,7 @@ function normalize(raw) {
     wallpaper: {
       on: source.wallpaper?.on !== false,
       visibility: wallpaperVisibility(source.wallpaper?.visibility),
+      glassTint: glassTint(source.wallpaper?.glassTint),
       // 手动换一张的偏移，连同它属于哪一天。跨日作废，见 wallpaperShift。
       shift: clamp(source.wallpaper?.shift, 0, 999, 0),
       shiftDay: text(source.wallpaper?.shiftDay).slice(0, 10),
@@ -404,7 +412,7 @@ module.exports = {
   normalize, normalizeOrder, normalizeCountdownItems, activeWidgets,
   validDate, daysUntil, countdownLabel, sortedCountdowns,
   pickQuote, dayIndex, clockText, dateText,
-  jpegSize, usableWallpaper, pickWallpaper, wallpaperShift, wallpaperVisibility,
+  jpegSize, usableWallpaper, pickWallpaper, wallpaperShift, wallpaperVisibility, glassTint,
   weatherText, weatherIcon, weatherScene, weatherScenesCoverIcons, weatherAnimated, SCENES,
   weatherStale, weatherUrl, weatherFromResponse, roundCoord,
 };

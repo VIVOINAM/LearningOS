@@ -1,0 +1,63 @@
+/* Learning OS 共用组件 —— 和 tokens.css 一样，构建时内联到每个插件 styles.css 的前面。
+ *
+ * 这里只放「六个插件都会弹出来的东西」：弹窗。每个插件各有几个弹窗（捕获、任务、
+ * 补充详情、复习、教材库、挂件设置……），原来各写各的边框和圆角——6px、7px、
+ * Obsidian 默认的方角，同一个产品里三种弹窗长相。放进工作台的样式表不行：
+ * 单独启用 codex-capture 时它的弹窗就没了样式。所以和令牌一样，每个插件带一份。
+ *
+ * 选择器只认我们自己的弹窗（按内容的类名 :has 进去），不碰 Obsidian 和别的插件的弹窗。
+ * 按钮只给「没有类名的按钮」和 .mod-cta 上皮肤：插件里带类名的按钮各有各的样子
+ * （评分键、教材行、移除键），通用规则一压上去它们就全变成一个样。
+ */
+
+.modal:has(:is(.los-task-modal, .cw-capture-modal, .cw-capture-input-modal, .os-detail-modal, .os-estimate-modal,
+  .os-project-modal, .os-modules, .cr-review, .cs-library, .cw-study-overview-modal, .ow-settings)) {
+  /* iOS 27 的弹层：比卡片更不透明（表单要读），同一道暗边加高光，大圆角。 */
+  border: 0;
+  border-radius: var(--os-r-card);
+  background: var(--os-glass-sheen), color-mix(in srgb, var(--os-paper) 94%, transparent);
+  -webkit-backdrop-filter: blur(40px) saturate(180%);
+  backdrop-filter: blur(40px) saturate(180%);
+  box-shadow: var(--os-glass-edge), 0 24px 60px rgba(0, 0, 0, 0.18);
+  color: var(--os-ink);
+  font-family: var(--os-text);
+}
+
+:is(.los-task-modal, .cw-capture-modal, .cw-capture-input-modal, .os-detail-modal, .os-estimate-modal,
+  .os-project-modal, .os-modules, .cr-review, .cs-library, .cw-study-overview-modal, .ow-settings) {
+  & h2 { font-family: var(--os-display); font-weight: 700; letter-spacing: -.2px; color: var(--os-ink); }
+
+  /* 输入：填充底、没有描边、12px 圆角。焦点时一圈系统蓝的光晕。 */
+  & :is(input:not([type=checkbox]):not([type=radio]):not([type=range]), textarea, select) {
+    border: 0; border-radius: 12px; background-color: var(--os-fill); color: var(--os-ink);
+    min-height: 36px; padding: 8px 12px; box-shadow: none; font: inherit; font-size: var(--fs-body);
+  }
+  & :is(input, textarea, select):focus-visible {
+    outline: 0; box-shadow: 0 0 0 3px color-mix(in srgb, var(--os-accent) 35%, transparent);
+  }
+  & :is(input[type=checkbox], input[type=radio], input[type=range]) { accent-color: var(--os-accent); }
+
+  /* 按钮：玻璃胶囊；主操作（.mod-cta）是实心系统蓝。 */
+  & button:not([class]), & button.mod-cta {
+    border: 0; border-radius: var(--os-r-pill); min-height: 34px; padding: 7px 16px;
+    background: var(--os-fill); color: var(--os-ink); font: inherit; font-size: var(--fs-body); font-weight: 600;
+    box-shadow: none; cursor: pointer;
+  }
+  & button:not([class]):hover { background: var(--os-soft); }
+  & button.mod-cta {
+    background: var(--os-lacquer); color: var(--os-accent-ink); box-shadow: var(--os-lacquer-glow);
+  }
+  & button.mod-cta:hover { filter: brightness(1.06); }
+
+  /* 工作台自己的按钮类在弹窗里也要认：它们的样式写在 .os-root 下面，而弹窗不在 .os-root 里，
+     于是「补充详情」底部三个按钮掉回了浏览器默认的方框。 */
+  & .os-button {
+    border: 0; border-radius: var(--os-r-pill); min-height: 32px; padding: 6px 14px;
+    background: var(--os-fill); color: var(--os-ink); font: inherit; font-size: var(--fs-body); font-weight: 600;
+    box-shadow: none; cursor: pointer;
+  }
+  & .os-button:hover { background: var(--os-soft); }
+  & .os-button.os-quiet { background: transparent; color: var(--os-accent); }
+  & .os-button.os-quiet:hover { background: var(--os-fill); }
+  & .os-button.os-primary { background: var(--os-lacquer); color: var(--os-accent-ink); box-shadow: var(--os-lacquer-glow); }
+}

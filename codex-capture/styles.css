@@ -3,7 +3,7 @@
 .modal:has(.cw-capture-input-modal) .modal-content{box-sizing:border-box;min-width:0;}
 .cw-capture-input{box-sizing:border-box;display:block;width:100%;min-height:120px;resize:vertical;font:inherit;line-height:1.5}
 .modal-content:has(.cw-capture-input) .cw-actions{display:flex;justify-content:flex-end;margin-top:16px}
-.modal-content:has(.cw-capture-input) .cw-primary{background:var(--os-accent-2);color:var(--os-paper);border:0;min-height:34px;padding:7px 18px}
+.modal-content:has(.cw-capture-input) .cw-primary{background:var(--os-lacquer);color:var(--os-accent-ink);border:0;border-radius:var(--os-r-pill);box-shadow:var(--os-lacquer-glow);min-height:34px;padding:7px 18px;font-weight:600}
 
 .los-task-modal {box-sizing:border-box;display:flex;flex-direction:column;width:100%;max-width:100%;max-height:calc(100vh - 48px);overflow:hidden;min-width:0;padding:4px 8px 18px;}
 .modal:has(.los-task-modal){width:min(680px,94vw);max-height:calc(100vh - 32px);}
@@ -15,18 +15,16 @@
 .los-form-field>span{display:block;line-height:1.4;overflow-wrap:anywhere;}
 .los-form-field input,.los-form-field select,.los-form-field textarea{box-sizing:border-box;width:100%;max-width:100%;min-width:0;font:inherit;line-height:1.4;}
 .los-form-field textarea{resize:vertical;}
-.los-stepper,.los-form-actions{display:flex;gap:8px;}.los-form-actions{justify-content:flex-end;position:static;background:var(--background-primary);padding:10px 0 2px;border-top:1px solid var(--background-modifier-border,var(--os-line));}
+.los-stepper,.los-form-actions{display:flex;gap:8px;}.los-form-actions{justify-content:flex-end;position:static;background:transparent;padding:10px 0 2px;border-top:.5px solid var(--os-glass-shade);}
 .los-check-row{display:flex;gap:6px;min-width:0;margin:6px 0;}.los-check-row input[type=text],.los-check-row input:not([type]){flex:1;width:auto;max-width:100%;min-width:0;}.los-check-row input[type=checkbox]{flex:none;}
 .los-form-more summary{cursor:pointer;color:var(--text-muted);margin:10px 0;}.los-form-more[open]{display:block;}.los-form-more>.los-form-field{margin:12px 0;}
 .los-form-hint,.los-form-status{font-size:12px;color:var(--text-muted);margin:0;}
 .los-form-field[hidden]{display:none;}
-.los-task-modal {color:var(--text-normal,var(--os-ink));background:var(--background-primary,var(--os-paper));font-family:var(--font-interface,'Segoe UI','Microsoft YaHei',sans-serif);}
-.los-task-modal h2{margin:0 0 18px;font-size:24px;}.los-task-modal h3{font-size:14px;margin:12px 0;}
-.los-task-modal input:not([type=checkbox]),.los-task-modal select,.los-task-modal textarea{box-sizing:border-box;border:1px solid var(--background-modifier-border,var(--os-line));border-radius:7px;background:var(--background-primary,var(--os-paper));color:inherit;padding:8px;}
+/* 输入框、按钮、标题的样子归 shared/components.css 的弹窗皮肤；这里只管布局。 */
+.los-task-modal {color:var(--os-ink);background:transparent;font-family:var(--os-text);}
+.los-task-modal h2{margin:0 0 18px;font-size:22px;}.los-task-modal h3{font-size:14px;margin:12px 0;}
 .los-task-modal input:not([type=checkbox]),.los-task-modal select,.los-task-modal textarea{max-width:100%;}
-.los-task-modal button{border:1px solid var(--background-modifier-border,var(--os-line));border-radius:6px;padding:6px 12px;background:var(--background-secondary,var(--os-soft));color:inherit;cursor:pointer;}
-.los-task-modal button.mod-cta{background:var(--interactive-accent,var(--os-accent));color:var(--text-on-accent,var(--os-paper));}
-.los-task-modal .los-form-actions {background:var(--background-primary,var(--os-paper));}
+
 @media(max-width:480px){.los-form-grid{grid-template-columns:1fr;}.los-task-modal{max-height:78vh;}}
 
 /* V5.1.5: keep the form body and action bar in separate layout rows. */
@@ -38,18 +36,3 @@
 .los-form-body{height:100%;min-height:0;overflow-x:hidden;overflow-y:auto;padding:0 2px 20px;scroll-padding-bottom:20px;}
 .los-form-actions{position:relative;z-index:2;flex:none;min-height:48px;margin-top:0;padding:10px 2px 2px;}
 .los-task-modal select{height:auto;min-height:36px;line-height:1.4;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
-
-/* 统一玻璃弹窗：外壳负责折射，内容区保持透明，字段用更密一档的玻璃保证可读性。 */
-.modal:has(.cw-capture-input-modal),.modal:has(.los-task-modal){
-  background:var(--os-glass-strong);
-  -webkit-backdrop-filter:var(--os-glass-blur);backdrop-filter:var(--os-glass-blur);
-  border:1px solid var(--os-glass-shade);border-top-color:var(--os-glass-lit);border-left-color:var(--os-glass-lit);
-  box-shadow:var(--os-glass-inset),0 24px 64px rgba(32,24,18,.18);
-}
-.modal:has(.cw-capture-input-modal) .modal-content,.modal:has(.los-task-modal) .modal-content,
-.los-task-modal,.los-task-modal .los-form-actions{background:transparent}
-.cw-capture-input,.los-task-modal input:not([type=checkbox]),.los-task-modal select,.los-task-modal textarea{
-  background:var(--os-glass-field);border-color:var(--os-glass-shade);box-shadow:var(--os-glass-inset);
-}
-.los-task-modal button:not(.mod-cta){background:var(--os-glass-soft);border-color:var(--os-glass-shade);box-shadow:var(--os-glass-inset)}
-.los-task-modal button:not(.mod-cta):hover{background:var(--os-glass-hover)}
