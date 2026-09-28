@@ -72,6 +72,11 @@ node tools/build.js --stage                # 构建到 dist/plugins
 | [知识模块联动](docs/知识模块联动.md) | 知识地图、周五自测与学习成果怎么分工 |
 | [知识图谱与出题规范](docs/知识图谱与出题规范.md) | 维护概念图谱、出自测题时要遵守的格式与校验 |
 
+## 贡献者
+
+- [VIVOINAM](https://github.com/VIVOINAM)：项目作者与维护者。
+- Claude（Anthropic）与 Codex（OpenAI）：AI 辅助贡献者；具体贡献以 Git 提交及 `Co-Authored-By` 联合署名记录为准。
+
 ## 许可证
 
 本仓库目前未附带开源许可证。代码公开可见不等于自动授予复制、修改或再分发权。
