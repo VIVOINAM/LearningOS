@@ -76,13 +76,13 @@ test("渲染保留版本锚点与模块名", () => {
   assert.match(out, /## v6\.0\.0 · 未发布/);
   assert.match(out, /## v5\.6\.5 · 2026-09-18/);
   assert.match(out, /\*\*工作台\*\*/);
-  assert.equal((out.match(/<!-- codex-version:6\.0\.0 -->/g) || []).length, 1);
+  assert.equal((out.match(/<!-- l-os-version:6\.0\.0 -->/g) || []).length, 1);
 });
 
 test("模块名与插件 id 双向对应", () => {
-  assert.equal(idFor("工作台"), "codex-workbench");
-  assert.equal(labelFor("codex-study"), "学习");
+  assert.equal(idFor("工作台"), "l-os-workbench");
+  assert.equal(labelFor("l-os-study"), "学习");
   assert.equal(idFor("不存在的模块"), undefined);
   // 已删除的插件仍要认得，否则历史小节会被当成写错的模块名。
-  assert.equal(idFor("版本迭代"), "codex-iteration");
+  assert.equal(idFor("版本迭代"), "l-os-iteration");
 });

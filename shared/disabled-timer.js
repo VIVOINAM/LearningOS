@@ -1,13 +1,13 @@
 "use strict";
 
 /**
- * CODEX 3.0 · 专注模块未启用时的只读占位。
+ * L-OS 3.0 · 专注模块未启用时的只读占位。
  *
  * 它不是第二套计时实现：只提供界面渲染所需的默认状态与剩余时间读取；
- * 任何会改变状态的操作都抛出差错，由工作台统一提示启用 codex-focus。
+ * 任何会改变状态的操作都抛出差错，由工作台统一提示启用 l-os-focus。
  */
 
-const MESSAGE = "Codex 专注插件未启用，请在第三方插件中启用 codex-focus 后重试。";
+const MESSAGE = "L-OS 专注插件未启用，请在第三方插件中启用 l-os-focus 后重试。";
 
 function initial(overrides = {}) {
   return Object.assign(
@@ -33,7 +33,7 @@ function remaining(timer, now = Date.now()) {
 
 function unavailable() {
   const error = new Error(MESSAGE);
-  error.code = "CODEX_MODULE_DISABLED";
+  error.code = "LOS_MODULE_DISABLED";
   throw error;
 }
 

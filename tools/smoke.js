@@ -18,6 +18,7 @@ class MockMenu {}
 const obsidian = {
   Plugin: MockPlugin,
   ItemView: MockItemView,
+  FileView: MockItemView,
   Modal: MockModal,
   Notice: MockNotice,
   Menu: MockMenu,

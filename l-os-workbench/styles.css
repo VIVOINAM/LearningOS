@@ -1,0 +1,1229 @@
+/* Learning OS 4.0 / warm paper. All layout rules are scoped to this view. */
+.workspace-leaf-content[data-type="l-os-workbench"] {overflow:hidden}
+.os-root {
+  /* 颜色与字阶令牌在 shared/tokens.css，构建时内联到本文件最前面。
+     下面的 @container 查询按尺寸重定义字号，改的是 .os-root，只影响本视图内部。 */
+  height:100%;width:100%;min-height:0;min-width:0;padding:0!important;overflow:hidden!important;
+  color:var(--os-body);container-type:size;container-name:os-root;isolation:isolate;
+  /* 五层，从上往下：两道色调渐变、一层遮罩、聚焦壁纸、兜底纯色。
+     --os-wallpaper 由 l-os-widgets 挂在 body 上；它不存在时那一层是 none，
+     整叠自动退化成 6.6 那两道渐变，不需要任何分支。
+     遮罩必须压在壁纸上方：文字实际压着的底因此仍然约等于 --os-bg，
+     对比度闸门量的那些关系照旧成立——否则每张图都是一套新的底色，没法预先量。 */
+  /* 两道极淡的冷色光斑是没挂壁纸时玻璃唯一的「背后有东西」：左上一片蓝、右上一片青。
+     它们是装饰，不压任何字——压字的底由遮罩和托底层管。 */
+  background:
+    radial-gradient(1100px 620px at 8% -14%, rgba(0,98,204,.10), transparent 62%),
+    radial-gradient(900px 520px at 98% 4%, rgba(18,135,140,.09), transparent 64%),
+    linear-gradient(var(--os-scrim), var(--os-scrim)),
+    var(--os-wallpaper, none) center / cover no-repeat,
+    var(--os-bg);
+  font-family:var(--os-text);font-size:var(--fs-body);line-height:1.6;-webkit-font-smoothing:antialiased;
+}
+.os-root * {box-sizing:border-box;min-width:0}
+.os-root h1,.os-root h2,.os-root h3,.os-root p {margin:0}
+.os-app {height:100%;display:grid;grid-template-columns:196px minmax(0,1fr);overflow:hidden}
+/* 左栏是一块半透明玻璃板，不是一列实心胶囊。 */
+.os-rail {display:flex;flex-direction:column;background:var(--os-glass-rail);
+  -webkit-backdrop-filter:var(--os-glass-blur);backdrop-filter:var(--os-glass-blur);
+  /* iOS 27 的侧栏贴到窗口边：上下左不留缝，只在右边一道暗边加一道内高光。 */
+  box-shadow:.5px 0 0 var(--os-glass-rim),inset -1px 0 0 var(--os-glass-spec);
+  padding:20px 14px 16px;gap:14px;overflow:hidden}
+.os-brand {display:flex;align-items:center;gap:10px}
+.os-mark {display:grid;place-items:center;width:32px;height:32px;flex:none;background:var(--os-lacquer);color:var(--os-accent-ink);font-family:var(--os-display);font-weight:700;font-size:18px;border-radius:9px;box-shadow:var(--os-lacquer-glow)}
+.os-wordmark {font-family:var(--os-display);font-size:14px;font-weight:650;letter-spacing:-.2px;color:var(--os-ink);min-width:0;overflow-wrap:anywhere}
+.os-nav {display:flex;flex-direction:column;flex:0 1 auto;min-height:0;gap:2px;overflow-y:auto;overscroll-behavior:contain;scrollbar-gutter:stable}
+.os-nav-group {display:flex;flex-direction:column;gap:2px}
+.os-nav-group+.os-nav-group {margin-top:10px}
+.os-nav-heading {padding:0 13px 5px;font-size:var(--fs-meta);font-weight:600;letter-spacing:.18em;text-transform:uppercase;color:var(--os-muted)}
+.os-root .os-button,.os-modules .os-button {
+  appearance:none;cursor:pointer;border:0;border-radius:var(--os-r-pill);box-shadow:none;
+  min-height:34px;height:auto;padding:7px 16px;background:var(--os-glass);color:var(--os-ink);
+  transition:background .24s var(--os-ease),color .24s var(--os-ease),border-color .24s var(--os-ease),box-shadow .24s var(--os-ease),transform .24s var(--os-ease);
+  font:inherit;font-size:var(--fs-body);font-weight:550;line-height:1.3;white-space:normal;transition:background .12s;
+}
+.os-root .os-button:hover {background:var(--os-soft)}
+.os-root .os-button:active {transform:scale(.97)}
+/* 玻璃胶囊的那圈边只给「普通按钮」：页头、左栏底部、卡片工具条、课表卡里的那几个。
+   不放在基础规则上——基础规则被几十种自定义按钮（任务行、课块、色标行、热力图）继承，
+   它们各自不写 box-shadow，第一版放在基础规则上，深色下课程列表每一行都套上了一个框。 */
+.os-root .os-header-actions .os-button:not(.os-quiet):not(.os-primary),
+.os-root .os-rail-foot .os-button:not(.os-quiet):not(.os-primary),
+.os-root .os-tools .os-button:not(.os-quiet):not(.os-primary),
+.os-root .os-class-actions .os-button:not(.os-quiet):not(.os-primary),
+.os-root .os-project-actions .os-button:not(.os-quiet):not(.os-primary) {
+  box-shadow:0 0 0 .5px var(--os-glass-rim),var(--os-glass-inset)}
+.os-root .os-button:disabled {opacity:.45;cursor:default}
+.os-root .os-button:focus-visible,.os-root input:focus-visible,.os-root [tabindex]:focus-visible {outline:2px solid var(--os-accent);outline-offset:2px}
+/* 主按钮一律深绿。赤陶红只剩两处：左上角的 L，和专注卡里那一个「开始专注」——
+   一页里只有一个地方是红的，那个地方才叫重点。 */
+/* 主按钮默认是墨绿线框、透明底——右上角那个「＋ 新任务」不该和番茄钟的
+   「开始专注」抢同一级视觉重量。只有专注卡里那一个是实底，而且是砖红。 */
+/* 默认主按钮：磨砂玻璃底 + 墨绿字 + 一道细边。右上角那个「＋ 新任务」不该和
+   番茄钟那块大漆抢重量——整页只有一块大漆。 */
+/* 7.0：主按钮是系统蓝的实心胶囊（iOS 的 prominent 样式）。 */
+.os-root .os-primary,.os-modules .os-primary {
+  background:var(--os-lacquer);color:var(--os-accent-ink);font-weight:650;border:0;box-shadow:var(--os-lacquer-glow)}
+.os-root .os-primary:hover,.os-modules .os-primary:hover {background:var(--os-lacquer);filter:brightness(1.06);transform:translateY(-1px)}
+/* 赤陶大漆：渐变加顶面高光，做出一块有厚度的漆，而不是一块纯色。 */
+.os-root .os-focus .os-primary {min-height:42px;font-size:15px;letter-spacing:.3px}
+.os-root .os-focus .os-primary:active {transform:scale(.97)}
+/* 次级动作是纯文字的系统蓝，和 iOS 的 plain 按钮一样：没有底，悬停才出一层填充。 */
+.os-root .os-quiet {background:transparent;box-shadow:none;color:var(--os-accent);font-weight:600}
+.os-root .os-quiet:hover {background:var(--os-fill);color:var(--os-accent)}
+.os-icon {color:var(--os-accent-2);display:inline-flex}
+.os-icon svg {stroke-width:1.6}
+.os-root .os-nav-button {display:flex;align-items:center;gap:12px;background:transparent;box-shadow:none;color:var(--os-ink);
+  text-align:left;padding:9px 12px;font-size:14px;font-weight:500;min-height:0;border-radius:12px;position:relative}
+.os-root .os-nav-button:hover {background:var(--os-fill)}
+.os-root .os-nav-button .os-icon {color:var(--os-muted)}
+/* 选中态：不再是一整块白底方案，只留一个砖红小标点加字色变化。
+   导航是五个并列项，用整块底色标记当前项，等于每次都有一块白挡在那儿。 */
+/* 选中项：一层填充加加粗，只有它的图标带颜色——iOS 27 / macOS 27 侧栏的做法。
+   六个图标全上色时谁也不醒目；只给当前那一个，颜色本身就是「你在这」。 */
+.os-root .os-nav-button.is-active {color:var(--os-ink);font-weight:650;background:var(--os-fill)}
+.os-root .os-nav-button.is-active .os-icon {color:var(--os-accent)}
+.os-icon {display:flex;width:18px;height:18px;flex:none}.os-icon svg{width:18px;height:18px}
+/* 挂件区。6.3 之前这段是 .os-nav{flex:1} 撑出来的纯空白，196px 宽、窗口高一点就有近 400px。
+   内容由 l-os-widgets 提供，样式也在那边；这里只定这块地方的尺寸与滚动行为。
+   flex:1 1 0 让它接管全部空档，foot 的 margin-top:auto 因此变成一句废话——保留着，
+   是为了插件没装时（容器 hidden）底部按钮仍然贴底。 */
+.os-widgets {min-height:0;display:flex;flex-direction:column;gap:8px;overflow-y:auto;overflow-x:hidden;overscroll-behavior:contain;scrollbar-gutter:stable}
+.os-widgets[hidden] {display:none}
+/* 下方那块接管导航和底部按钮之间的全部空档。 */
+.os-widgets-bottom {flex:1 1 0;padding-top:4px}
+/* 上方那块按内容高度，不抢空间：它挤在品牌和导航之间，长一点点都直接推走导航。
+   自己不滚——放得下几块是几块，放不下是设置的问题，不该在这里挤出一条 40px 的滚动缝。 */
+.os-widgets-top {flex:none;overflow:visible;scrollbar-gutter:auto}
+/* 上方那块空了就整块消失，品牌和导航之间不留一道只有 gap 的缝。
+   下方那块空了也留着：它是撑开导航和底部按钮之间那段空档的弹簧。 */
+.os-widgets-top[data-empty] {display:none}
+/* 7.4 齿轮搬去页头之后，下方那块空了也不画任何东西；它仍占着导航和底部之间的空档，底部照样贴底。 */
+/* 页头那一块：横排，跟着右上角的按钮走。空了同样整块消失。
+   min-width:0 加 flex:0 1 auto，是为了窗口窄下来时它先让位给按钮而不是挤出横向滚动。 */
+.os-widgets-header {flex:0 1 auto;flex-direction:row;align-items:center;gap:14px;min-width:0;overflow:hidden;scrollbar-gutter:auto;margin-inline-end:12px}
+.os-widgets-header[data-empty] {display:none}
+.os-rail-foot {margin-top:auto;display:flex;flex-direction:column;gap:12px;flex-shrink:0}
+.os-local {font-size:var(--fs-meta);color:var(--os-muted);text-align:center;letter-spacing:1px}
+/* 层三：页头托底带。页标题、副标题、页头元信息不在任何面板里，直接压在壁纸上——
+   实拍图里它们量到 2.15 和 2.94。这里不给它们加盒子（那会让「优先做减法」失守），
+   加的是一道自上而下、看不出边界的暗化。高度盖住页头加一段淡出，
+   浓度走 --os-scrim-floor：归闸门管，用户那个图片可见度滑块碰不到。 */
+/* 内边距放进两个变量：顶栏要用负边距贴满 main 的上左右，得知道此刻的内边距是多少。 */
+.os-main {--main-pt:18px;--main-px:32px;display:flex;flex-direction:column;gap:16px;padding:var(--main-pt) var(--main-px) 10px;min-height:0;overflow:hidden;position:relative}
+/* 7.0：页头那道渐变托底带换成 iOS 27 的「统一磨砂顶栏」——一整条玻璃，贴着 main 的上、左、右边。
+   它同样是页面级文字的底：顶栏的玻璃带着钳位，标题压着的底有下限，和托底带是同一个保证。 */
+/* 页脚同理：它也是页面级文字。第一版只做了页头，闸门把锚点表加宽之后
+   立刻量到页脚 1.07——同一个病，只是当时没人看它。 */
+.os-main::after {content:"";position:absolute;inset:auto 0 0;height:96px;pointer-events:none;z-index:0;
+  background:linear-gradient(transparent 0%,var(--os-scrim-floor) 62%,var(--os-scrim-floor) 100%)}
+.os-main>* {position:relative;z-index:1}
+.os-header {display:flex;align-items:center;justify-content:space-between;gap:18px;flex:none;
+  margin:calc(-1 * var(--main-pt)) calc(-1 * var(--main-px)) 0;padding:max(calc(var(--main-pt) - 6px),6px) var(--main-px) 10px;background:var(--os-glass);
+  -webkit-backdrop-filter:var(--os-glass-blur);backdrop-filter:var(--os-glass-blur);
+  box-shadow:0 .5px 0 var(--os-glass-rim),inset 0 -1px 0 var(--os-glass-spec)}
+.os-heading h1 {font-family:var(--os-display);font-size:clamp(23px,2.1cqw,32px);font-weight:700;letter-spacing:-.4px;line-height:1.15;color:var(--os-ink)}
+/* 这两条是页面级文字：它们不在任何面板里，托底带是它们唯一的底。
+   所以不许用 --os-muted 那一级——「次要」是为有面的地方定的，余量只够那儿用。
+   规则：没有面的文字，最低走 --os-body。 */
+.os-page-status {font-size:var(--fs-meta);color:var(--os-body);line-height:1.5;overflow-wrap:anywhere;min-width:0}
+.os-overline {font-size:var(--fs-meta);letter-spacing:1.2px;color:var(--os-body);font-weight:600}
+.os-header-actions {display:flex;gap:8px;flex:none}
+.os-content {flex:1;min-height:0;overflow:hidden;display:flex;flex-direction:column}
+.os-footer {display:flex;align-items:center;justify-content:space-between;color:var(--os-body);font-size:var(--fs-meta);min-height:24px;flex:none;gap:10px}
+.os-root .os-footer button {padding:2px 8px;min-height:22px;font-size:var(--fs-meta)}
+/* 三栏：专注与阅读 / 今日要务与统计 / 下一步行动。
+   用 grid-template-areas 而不是顺序摆位——窄下来要把三栏折成两栏，
+   折的时候改的是这张表，不用动 DOM，也不用给某一栏加 order。 */
+.os-today-grid {flex:1;min-height:0;display:grid;gap:22px;overflow:hidden;
+  grid-template-columns:minmax(280px,1fr) minmax(250px,.92fr) minmax(0,1.42fr);
+  grid-template-areas:"focus intent actions"}
+.os-today-col {display:flex;flex-direction:column;gap:20px;min-height:0;overflow:hidden}
+.os-today-col.is-focus {grid-area:focus}
+.os-today-col.is-intent {grid-area:intent}
+.os-today-col.is-actions {grid-area:actions}
+/* 交互卡一律纯白，包括这张——它原来是全页唯一一块「像底」的卡。 */
+.os-intent {
+  background:var(--os-glass-sheen),var(--os-glass);-webkit-backdrop-filter:var(--os-glass-blur);backdrop-filter:var(--os-glass-blur);
+  box-shadow:var(--os-glass-edge);border-radius:var(--os-r-card);padding:20px 22px;flex:none}
+.os-root .os-input {min-width:0;max-width:100%;min-height:36px;height:auto;padding:8px 12px;border:0;border-radius:12px;background:var(--os-fill);color:var(--os-ink);font:inherit;font-size:var(--fs-body);box-shadow:none}
+.os-root .os-project-container>.os-input,.os-root .os-project-editor>.os-input {display:block;width:100%;max-width:100%;}
+.os-input::placeholder {color:var(--os-muted);opacity:1}
+.os-root select {min-width:0;max-width:100%;min-height:36px;padding:7px 28px 7px 12px;border:0;border-radius:12px;background-color:var(--os-fill);color:var(--os-ink);font:inherit;font-size:var(--fs-body);
+  appearance:none;background-image:linear-gradient(45deg,transparent 50%,currentColor 50%),linear-gradient(135deg,currentColor 50%,transparent 50%);
+  background-position:right 13px center,right 8px center;background-size:5px 5px,5px 5px;background-repeat:no-repeat}
+.os-root select:focus-visible {outline:2px solid var(--os-accent);outline-offset:2px}
+.os-metrics {display:flex;gap:34px}.os-metrics>div {display:flex;align-items:baseline;gap:8px}
+.os-metrics strong {font-family:var(--os-display);font-size:var(--fs-display);font-weight:400;font-variant-numeric:tabular-nums}
+.os-metrics span {color:var(--os-muted);font-size:var(--fs-meta)}
+/* 液态玻璃面板。四条边不是一个颜色：上缘和左缘受光、下缘和右缘背光，
+   这一条比模糊本身更决定它像不像一块有厚度的玻璃——模糊只让背后糊掉，
+   是这圈方向性的高光让它有了朝向。 */
+/* 7.0：iOS 27 的玻璃。四样东西叠出来：底色（--os-glass）、左上一片镜面反光（--os-glass-sheen）、
+   外圈一道压暗的边加内圈高光（--os-glass-edge）、背后的扩散与亮度钳位（--os-glass-blur）。
+   6.6 那版靠「上左受光、下右背光」的四色描边表达厚度；27 改成暗边 + 高光，边界在任何背景上都分得出。 */
+.os-panel,.os-glass {
+  display:flex;flex-direction:column;min-height:0;overflow:hidden;
+  border-radius:var(--os-r-card);background:var(--os-glass-sheen),var(--os-glass);
+  -webkit-backdrop-filter:var(--os-glass-blur);backdrop-filter:var(--os-glass-blur);
+  box-shadow:var(--os-glass-edge);
+}
+.os-grow,.os-fill {flex:1;min-height:0}
+/* 面板头里没有标题（页标题就是它的名字，panel() 不再重复画 h2）时，只剩右上的工具：
+   不留 20+15px 的空带，工具靠右贴上去。 */
+.os-panel-head:has(>div:empty) {padding-top:14px;padding-bottom:6px}
+/* 教材、待解疑问、间隔复习这几页常年只有一两条——那是它们的正常状态，不是空数据。
+   面板高度跟内容走，不跟视口走：原来一条教材画出一个 79% 空白的大框。 */
+.os-root .os-page-books>.os-panel,.os-root .os-page-questions>.os-panel,.os-root .os-page-recall>.os-panel,.os-root .os-page-ownbooks>.os-panel {flex:0 1 auto;max-height:100%}
+.os-panel-head {display:flex;align-items:center;justify-content:space-between;gap:10px;padding:20px 22px 15px;flex:none}
+.os-panel-head h2 {font-size:var(--fs-title);line-height:1.3;font-weight:600;margin-top:5px}
+.os-tools {display:flex;align-items:center;gap:4px;flex-wrap:wrap;justify-content:flex-end}
+.os-panel-body {flex:1;min-height:0;overflow-y:auto;overflow-x:hidden;overscroll-behavior:contain;scrollbar-gutter:stable;padding:0 22px 16px}
+.os-root ::-webkit-scrollbar {width:5px;height:5px}.os-root ::-webkit-scrollbar-thumb {border-radius:5px;background:var(--os-line)}
+.os-empty {display:flex;flex-direction:column;justify-content:center;align-items:flex-start;gap:9px;padding:24px 12px;min-height:min(100%,220px);max-width:420px;color:var(--os-muted)}
+.os-empty strong {font-size:var(--fs-title);color:var(--os-ink);font-weight:550}.os-empty p{font-size:var(--fs-body);line-height:1.8}
+/* 行与行之间是一道细分隔，不是分区线：--os-line 是给「卡片边界」那一级用的，
+   拿来隔一条条任务，整张列表会读成一张表格。 */
+.os-task-row,.os-file-row {display:flex;align-items:center;gap:12px;padding:8px 0;border-bottom:.5px solid var(--os-glass-shade)}
+.os-task-row:last-child,.os-file-row:last-child{border-bottom:0}
+/* 勾选框是圆的，和 iOS 提醒事项一样。 */
+.os-root .os-check {width:22px;min-height:22px;height:22px;border-radius:50%;padding:0;flex:none;border:1.5px solid var(--os-muted);background:transparent;color:var(--os-accent);box-shadow:none}
+.os-row-main {flex:1;overflow-wrap:anywhere}.os-row-main strong {font-weight:550;font-size:var(--fs-body)}
+.os-task-title {font-size:var(--fs-body);line-height:1.6;overflow-wrap:anywhere}
+.os-row-meta {display:flex;align-items:center;gap:4px;flex-wrap:wrap;font-size:var(--fs-meta);color:var(--os-muted);margin-top:2px}
+/* 元数据一律做成 chip。此前它们是纯文字，只靠颜色区分，而 11px 上的
+   一点色差分辨不出来——逾期和普通日期看起来一样。 */
+/* 元数据药丸。原来是一排高度不一、各带描边的小贴片，看着像手工贴纸。
+   现在统一成 20px 高、11px 字、无描边的淡底标签，靠底色分组不靠边框分组——
+   描边是这一排最吵的东西，去掉之后它们才排得成一行印刷品。 */
+.os-chip {display:inline-flex;align-items:center;height:20px;padding:0 9px;border-radius:var(--os-r-pill);font-weight:600;
+  background:var(--os-pill-green-bg);color:var(--os-pill-green-ink);border:0;
+  font-size:11px;line-height:20px;white-space:nowrap;font-variant-numeric:tabular-nums}
+/* 第二组淡底：优先级这类「这条任务的属性」。 */
+.os-chip.os-priority,.os-chip.os-budget {background:var(--os-pill-warm-bg);color:var(--os-pill-warm-ink)}
+/* 第三组：逾期 / 今天截止。细则里没有这一组，但逾期是状态不是元数据——
+   并进前两组，那条最该被看见的信息就消失在同色的一排里了。 */
+/* due.js 给出的三档是 overdue / soon / normal——normal 走默认那组绿底。 */
+.os-chip.os-overdue,.os-chip.os-soon {background:var(--os-pill-alert-bg);color:var(--os-pill-alert-ink);font-weight:600}
+.os-chip[hidden] {display:none}
+.os-chip-project {max-width:min(240px,40%);overflow:hidden;text-overflow:ellipsis;display:inline-block}
+.os-root .os-overdue {color:var(--os-danger);font-weight:650}
+.os-root .os-soon {color:var(--os-accent-2);font-weight:650}
+.os-root .os-source {color:var(--os-muted);background:transparent;border:0;border-radius:0;min-height:18px;padding:0;font-size:var(--fs-meta);text-align:left;text-decoration:underline;text-underline-offset:3px;max-width:220px;overflow:hidden;white-space:nowrap;text-overflow:ellipsis}
+/* 任务行动作平时收起：一行五个文字按钮会盖过任务本身。
+   用 opacity 而不是 display:none —— 后者会把按钮移出 Tab 顺序，
+   键盘和读屏就再也够不到了。focus-within 保证键盘操作时同样显现。 */
+/* 行内动作浮在行上，不占行宽。
+   原来是 flex:none + opacity:0——看不见，却照样占着 286px，而整行只有 495px：
+   任务标题分到 164px，于是标题折行、项目药丸被截成「本周学…」。
+   这和 6.1 抓到的「117px 行距里有一行是 0% 填充率的字段」是同一类：
+   不可见但占位。宽度不该为一组不显示的按钮预留。
+
+   不用 display:none 是因为那会让整行在 hover 的瞬间重排。改成绝对定位浮在右端，
+   底下垫一道往左淡出的实底，压住的文字不会和按钮糊在一起。 */
+.os-task-row {position:relative}
+.os-row-actions {display:flex;align-items:center;gap:2px;flex-wrap:nowrap;
+  position:absolute;right:0;top:50%;transform:translateY(-50%);z-index:2;
+  /* width:max-content 不能省。绝对定位之后这一块按「静态位置到右边缘」收缩，
+     那点宽度只有 122px，四个按钮折成四行、整块 182px 高，再被 top:50% 居中到
+     58px 的行上——上沿直接顶进工具条，点击被工具条拦掉。 */
+  width:max-content;max-width:calc(100% - 36px);
+  padding:2px 0 2px 30px;border-radius:9px;
+  background:linear-gradient(90deg,transparent 0,var(--os-paper) 26px);
+  opacity:0;pointer-events:none;transition:opacity .22s var(--os-ease)}
+.os-task-row:hover .os-row-actions,
+.os-task-row:focus-within .os-row-actions {opacity:1;pointer-events:auto}
+.os-row-actions button {font-size:var(--fs-meta)!important}
+.os-priority{color:var(--os-accent-2)}.is-done .os-task-title {text-decoration:line-through;color:var(--os-muted)}
+.os-focus {
+  position:relative;isolation:isolate;
+}
+.os-focus>.os-panel-head,.os-focus>.os-panel-body {position:relative;z-index:1}
+.os-focus .os-panel-body {display:flex;flex-direction:column;align-items:center;justify-content:safe center;padding:10px 20px 16px;text-align:center}
+/* ---------- 专注台 ---------- */
+
+/* 凹陷的分段控件：槽是一层压暗，选中项是一块浮在槽里的象牙玻璃。
+   凹陷感全靠槽比周围暗这一点——没有它，三个按钮只是三个按钮。 */
+.os-modes {display:flex;gap:2px;padding:3px;border-radius:var(--os-r-pill);background:var(--os-fill);flex:none;margin-bottom:14px}
+.os-root .os-modes .os-mode {flex:1;min-width:0;border:0;background:transparent;border-radius:9999px;
+  min-height:28px;padding:4px 12px;font-size:12px;font-weight:500;color:var(--os-ink);box-shadow:none;
+  transition:background .28s var(--os-ease),color .28s var(--os-ease),box-shadow .28s var(--os-ease)}
+.os-root .os-modes .os-mode:hover:not(.is-active):not(:disabled) {color:var(--os-body)}
+.os-root .os-modes .os-mode.is-active {background:var(--os-mode-glass);color:var(--os-mode-ink);font-weight:650;
+  box-shadow:0 0 0 .5px var(--os-glass-rim),inset 0 1px 0 var(--os-glass-lit),0 2px 6px rgba(0,0,0,.12)}
+.os-root .os-modes .os-mode:disabled {opacity:.55}
+
+/* 表盘。SVG 撑出方形，读数绝对定位居中——用 grid 叠放会让读数跟着圆环的
+   宽高变，而读数的字号是按容器查询定的，两套尺寸打架。 */
+/* 表盘尺寸跟容器高度走，不跟宽度走。按宽度定会在窄高窗口里把下面的按钮挤出卡片——
+   而那正是这张卡最不能丢的东西。上限 200px 是量出来的：面板体 394px，
+   模式条 / 绑定条 / 珠子 / 按钮组加起来占 192px。 */
+.os-dial {position:relative;flex:none;width:clamp(116px,min(24cqh,52cqw),200px);aspect-ratio:1;margin:0 auto;display:grid;place-items:center;container-type:inline-size}
+.os-dial-svg {position:absolute;inset:0;width:100%;height:100%;transform:rotate(-90deg);overflow:visible}
+.os-dial-track {fill:none;stroke:var(--os-fill);stroke-width:3}
+.os-dial-arc {fill:none;stroke:var(--os-accent);stroke-width:3;stroke-linecap:round}
+
+/* 末端那颗小圆点带一层同色的柔光。柔光是第二个更大的半透明圆，不是 drop-shadow——
+   滤镜每一帧都要重新栅格化，而这东西每秒都在动，代价直接变成肉眼可见的闪。 */
+.os-dial-bead {fill:var(--os-sage)}
+.os-dial-glow {fill:var(--os-sage);opacity:.28}
+.os-dial-bead-wrap {transform-box:view-box;transform-origin:50px 50px;transition:opacity .3s var(--os-ease)}
+
+/* 过渡只在跑起来时开，时长正好一拍、线性——每秒到一个新值、用整整一秒匀速走到位，
+   接起来就是连续的。暂停和归零时没有这个 class，于是那两下是瞬时的：
+   归零是 0% 跳回 100%，带着过渡的话圆点会倒着绕一整圈。 */
+.os-dial.is-live .os-dial-bead-wrap {transition:transform 1s linear,opacity .3s var(--os-ease)}
+.os-dial.is-live .os-dial-arc {transition:stroke-dashoffset 1s linear}
+.os-dial-face {position:relative;display:flex;flex-direction:column;align-items:center;gap:2px}
+
+.os-time {font-size:28cqw;font-family:var(--os-display);font-weight:300;letter-spacing:-2px;line-height:1.02;
+  font-variant-numeric:tabular-nums;color:var(--os-ink);flex:none}
+/* 展示字体未必支持等宽数字。固定每位的占位，秒数变化时相邻数字不再横跳。 */
+.os-time {display:flex;justify-content:center;letter-spacing:0;white-space:nowrap}
+/* 字号跟随表盘自身宽度，三位分钟数也要给圆环留出内边距。 */
+.os-time.is-long {font-size:24cqw}
+.os-time-digit {display:block;width:.55em;text-align:center}
+.os-time-colon {display:block;width:.24em;text-align:center}
+
+/* 加减号平时不在，鼠标进了表盘才浮出来——调时长不该常年占一行。 */
+.os-time-step {display:flex;gap:10px;opacity:0;transition:opacity .28s var(--os-ease);pointer-events:none}
+.os-dial:hover .os-time-step,.os-time-step:focus-within {opacity:1;pointer-events:auto}
+.os-root .os-step {min-height:22px;padding:0 10px;border-radius:9999px;border:1px solid var(--os-glass-shade);
+  background:var(--os-glass);color:var(--os-muted);font-size:var(--fs-meta);box-shadow:none}
+.os-root .os-step:hover {color:var(--os-sage);border-color:var(--os-sage)}
+
+/* 轮次珠子 */
+.os-beads {display:flex;gap:7px;margin-bottom:16px;flex:none}
+.os-bead {width:7px;height:7px;border-radius:50%;border:1px solid var(--os-sage);opacity:.45;
+  transition:opacity .3s var(--os-ease),background .3s var(--os-ease)}
+.os-bead.is-done {background:var(--os-sage);opacity:1}
+
+/* 形变 CTA：空闲时开始键通栏，跑起来让出 35% 给结束键。 */
+.os-focus-controls {display:flex;gap:10px;justify-content:center;width:min(270px,100%);flex:none;
+  transition:gap .3s var(--os-ease)}
+.os-root .os-focus-controls .os-button {flex:1;min-width:0;transition:flex-grow .34s var(--os-ease)}
+.os-focus-controls.is-running .os-primary {flex:65}
+.os-focus-controls.is-running .os-stop {flex:35}
+.os-root .os-stop[hidden] {display:none}
+.os-root .os-focus-controls .os-stop {background:var(--os-glass);color:var(--os-body);
+  border:1px solid var(--os-glass-shade);border-top-color:var(--os-glass-lit);box-shadow:var(--os-glass-inset)}
+
+.os-resume {flex:0 1 174px;min-height:110px}.os-resume .os-panel-head{padding-top:15px;padding-bottom:10px}.os-resume .os-panel-body{padding-bottom:12px}
+.os-scratchpad {flex:1 1 138px;min-height:126px}
+.os-scratchpad .os-panel-head {padding-top:9px;padding-bottom:6px}
+.os-scratchpad .os-panel-head h2 {font-size:13px;margin-top:0;white-space:nowrap}
+.os-scratchpad .os-overline {font-size:9px;line-height:1.2;letter-spacing:.5px;white-space:nowrap}
+.os-scratchpad .os-tools {gap:1px;flex-wrap:nowrap}
+.os-root .os-scratchpad .os-tools .os-button {min-height:27px;padding:3px 7px;font-size:10px;white-space:nowrap}
+.os-scratchpad .os-panel-body {display:grid;grid-template-rows:minmax(42px,.9fr) minmax(34px,1fr);gap:4px;padding-bottom:7px;overflow:hidden}
+.os-scratchpad-input {width:100%;min-height:42px;resize:none;padding:5px 9px;border:1px solid var(--os-line);border-radius:7px;background:var(--os-glass-field);color:var(--os-ink);font:inherit;font-size:10px;line-height:1.35;box-shadow:var(--os-glass-inset)}
+.os-scratchpad-input::placeholder {color:var(--os-muted)}
+.os-scratchpad-input:focus-visible {outline:2px solid var(--os-accent-2);outline-offset:1px}
+.os-scratchpad-preview {min-height:34px;padding:6px 9px;border:1px dashed var(--os-glass-shade);border-radius:7px;background:var(--os-glass-soft);overflow:auto;font-size:10px;line-height:1.45}
+.os-scratchpad-preview>:first-child {margin-top:0}.os-scratchpad-preview>:last-child {margin-bottom:0}
+.os-scratchpad-preview .math-block {overflow-x:auto;overflow-y:hidden}.os-scratchpad-preview mjx-container {color:var(--os-ink)}
+.os-scratchpad-preview.is-raw {font-family:var(--font-monospace);white-space:pre-wrap;overflow-wrap:anywhere;color:var(--os-danger)}
+.os-scratchpad-placeholder {color:var(--os-muted)}
+/* 阅读进度：一根细的橄榄绿液条。高度 3px——它是参考信息，不是这张卡的主角。 */
+.os-read-track {height:3px;border-radius:999px;background:var(--os-glass-recess);margin-top:9px;overflow:hidden}
+.os-read-fill {display:block;height:100%;border-radius:inherit;background:var(--os-accent-2);transition:width .6s var(--os-ease)}
+.os-book-title {font-size:var(--fs-body);display:block;overflow:hidden;white-space:nowrap;text-overflow:ellipsis;font-weight:550}
+.os-muted {color:var(--os-muted);font-size:var(--fs-meta);line-height:1.6;overflow-wrap:anywhere;margin-top:4px!important}
+.os-toolbar {display:flex;justify-content:space-between;align-items:center;gap:16px;padding:0 22px 14px;flex:none;flex-wrap:wrap}
+.os-toolbar>.os-input {flex:1;max-width:330px;min-width:160px}
+/* 7.0：页内筛选、页头分段、窄屏切换，全部是同一个 iOS 分段控件——
+   一道填充的槽，选中项是一块浮起来的白胶囊。原来这三处各是一种样子，
+   而今日页的专注模式条早就是这一种了。 */
+.os-segments,.os-sections,.os-mobile-switch {display:inline-flex;gap:2px;padding:3px;border-radius:var(--os-r-pill);background:var(--os-fill);flex-wrap:wrap}
+.os-root .os-segments button,.os-root .os-sections .os-section,.os-root .os-mobile-switch button {
+  min-height:26px;padding:3px 14px;border:0;border-radius:var(--os-r-pill);background:transparent;box-shadow:none;
+  color:var(--os-ink);font-size:12px;font-weight:500}
+.os-root .os-segments button:hover,.os-root .os-sections .os-section:hover {background:transparent;color:var(--os-ink)}
+.os-root .os-segments button.is-active,.os-root .os-sections .os-section.is-active,.os-root .os-mobile-switch button.is-active {
+  background:var(--os-mode-glass);color:var(--os-mode-ink);font-weight:650;
+  box-shadow:0 0 0 .5px var(--os-glass-rim),inset 0 1px 0 var(--os-glass-lit),0 2px 6px rgba(0,0,0,.10)}
+.os-course-grid {display:grid;grid-template-columns:repeat(auto-fill,minmax(270px,1fr));gap:16px;padding:18px 0}
+/* 卡中卡改成「嵌进去的一块」：填充底、同心圆角、没有描边。
+   原来是一张白卡里摆九张带灰边的卡，边框比内容还显眼。 */
+.os-course {display:flex;flex-direction:column;gap:12px;min-height:200px;padding:18px;border:0;border-radius:var(--os-r-inner);background:var(--os-fill)}
+.os-course h3 {font-size:var(--fs-title);font-weight:550;line-height:1.4}
+.os-root .os-course-title {appearance:none;all:unset;cursor:pointer;font:inherit;color:inherit;text-align:left;border-radius:6px;transition:color .12s}
+.os-root .os-course-title:hover {color:var(--os-accent)}
+.os-root .os-course-title:focus-visible {outline:2px solid var(--os-accent);outline-offset:2px}.os-course-next{color:var(--os-muted);font-size:var(--fs-body);line-height:1.6;flex:1;overflow-wrap:anywhere}
+.os-course-actions{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-top:auto}
+.os-pagination {display:flex;align-items:center;justify-content:center;gap:14px;padding:20px 0;font-size:var(--fs-meta);flex-wrap:wrap}
+/* ---------- 统计数据 ---------- */
+
+/* 中间栏新增闪念后，统计卡不参与 flex 收缩：收缩会让通用的 panel-body 自己滚，
+   结果三个读数的上半截被切掉。这里宁可让下面的闪念变矮，也不让只看一眼的统计卡滚。 */
+.os-stats {flex:0 0 auto}
+.os-stats .os-panel-head {padding-top:12px;padding-bottom:8px}
+.os-stats .os-panel-head h2 {font-size:16px;margin-top:0}
+.os-stats .os-panel-body {flex:none;overflow:hidden;padding-bottom:12px;scrollbar-gutter:auto}
+
+/* 三块读数做成瓦片，不再是一行并排的数字。并排那版挤在「今日要务」卡里，
+   和「今天做哪一件」共用一张卡——一个决定和一次回顾叠在一起，谁也不像主角。 */
+.os-stat-tiles {display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:6px;flex:none}
+.os-stat-tile {display:flex;flex-direction:column;align-items:center;gap:1px;
+  padding:7px 4px 6px;border-radius:var(--os-r-inner);background:var(--os-fill)}
+.os-stat-tile strong {font-family:var(--os-display);font-size:24px;font-weight:600;
+  font-variant-numeric:tabular-nums;color:var(--os-ink);line-height:1.02}
+.os-stat-tile span {font-size:10px;color:var(--os-body);text-align:center;
+  overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:100%}
+
+/* 迷你热力图。整块是一个按钮：这里只回答「最近在不在学」，
+   哪一天具体是什么归「回顾 → 学习热力」那一页，两处不各存一份选中态。 */
+.os-root .os-heat-mini {appearance:none;display:block;width:100%;margin-top:8px;padding:0;
+  border:0;background:transparent;box-shadow:none;cursor:pointer;min-height:0;
+  border-radius:8px;transition:opacity .2s var(--os-ease)}
+.os-root .os-heat-mini:hover {opacity:.78;background:transparent}
+.os-root .os-heat-mini:focus-visible {outline:2px solid var(--os-accent);outline-offset:3px}
+/* 格子是正方的。整页那版写的是 width:100% 加 height:16px，在 1fr 的列里
+   被拉成横向长方形，整块读成条纹表而不是热力图——那一处留给铺满那一轮。 */
+/* 收到 15px 一格。满宽时一格 22px，而这块只回答「最近在不在学」，
+   占的份量不该压过上面那三个读数。 */
+.os-heat-mini-grid {display:grid;grid-template-rows:repeat(7,minmax(0,1fr));gap:2px;
+  width:100%;max-width:178px}
+.os-heat-cell {display:block;aspect-ratio:1;border-radius:2px;min-width:0}
+.os-heat-cell.is-future {opacity:.3}
+
+.os-heat-day-stats>div {display:flex;align-items:baseline;gap:7px}
+.os-heat-day-stats span {font-size:var(--fs-meta);color:var(--os-muted)}
+.os-heatmap-caption {color:var(--os-muted);font-size:var(--fs-meta);margin-bottom:20px!important}
+.os-heatmap-line {display:grid;grid-template-columns:24px minmax(0,1fr);gap:9px;align-items:start;min-width:0;max-width:100%}
+/* 格子是方的，边长一个变量管：星期标签、月份标签、格子三处共用，才对得齐。
+   第一版只给格子加了 aspect-ratio，标签还按 16px 一行排，最下面那行错开 165px。 */
+/* 边长按这一行自己的宽度算，不按整个视图：窄窗口下热力图那一栏比视图窄得多，
+   按视图算会溢出。100cqw 减去星期列（24）、列间距（9）、十一道格间距（55）和内边距（8），
+   再除以十二周。变量要定义在子元素上——cqw 指向最近的容器，也就是 .os-heatmap-line 自己。 */
+.os-heatmap-line {container-type:inline-size}
+.os-heatmap-line>* {--heat-cell:clamp(8px,calc((100cqw - 96px) / 12),30px)}
+.os-heatmap-weekdays {display:grid;grid-template-rows:repeat(7,var(--heat-cell));gap:5px;color:var(--os-muted);font-size:var(--fs-meta);line-height:var(--heat-cell);text-align:right}
+.os-heatmap-weekdays {margin-top:22px}
+/* 选中格的 outline 画在格子外 4px（2px 宽 + 2px 偏移）。容器要留出这 4px，
+   否则最后一列和首尾行的描边会被裁掉——而今天永远在最后一列，等于每次打开都能看到。
+   注意 overflow-x:hidden 会把 overflow-y 的 visible 强制成 auto，所以上下也要留。 */
+/* 格子要是方的。原来 width:100% 配 height:16px，在宽面板里被拉成 60×16 的长条，
+   整块读成条纹表。现在格子按宽度取正方形，整块宽度封顶——十二周刚好是一块紧凑的图。 */
+.os-heatmap-chart-wrap {min-width:0;max-width:100%;overflow-x:hidden;padding:4px 4px 9px}
+.os-heatmap-chart-wrap::-webkit-scrollbar {height:4px}
+.os-heatmap-months {display:grid;gap:5px;width:100%;min-width:0;max-width:100%;height:18px;color:var(--os-muted);font-size:var(--fs-meta);line-height:14px}
+.os-heatmap-months span {overflow:hidden;white-space:nowrap}
+.os-heatmap-grid {display:grid;grid-template-rows:repeat(7,var(--heat-cell));gap:5px;min-width:0;max-width:100%}
+.os-root .os-heatmap-cell {width:100%;height:100%;min-width:0;min-height:0;padding:0;border-radius:6px;border:1px solid transparent;box-shadow:none;background:var(--os-heat-0)!important}
+.os-root .os-heatmap-cell:hover {border-color:var(--os-accent);transform:translateY(-1px)}
+.os-root .os-heatmap-cell.is-selected {outline:2px solid var(--os-accent);outline-offset:2px;z-index:1}
+.os-root .os-heatmap-cell.is-future {opacity:.35;cursor:default}
+.os-heat-level-0 {--os-cell:var(--os-heat-0)}
+.os-heat-level-1 {--os-cell:var(--os-heat-1)}
+.os-heat-level-2 {--os-cell:var(--os-heat-2)}
+.os-heat-level-3 {--os-cell:var(--os-heat-3)}
+.os-heat-level-4 {--os-cell:var(--os-heat-4)}
+.os-root .os-heatmap-cell,.os-heat-swatch,.os-heat-cell {background:var(--os-cell,var(--os-heat-0))!important}
+.os-heatmap-legend {display:flex;align-items:center;justify-content:flex-end;gap:5px;margin-top:18px}
+.os-heat-swatch {display:block;width:13px;height:13px;border-radius:3px}
+.os-heat-day-title {font-size:var(--fs-title);font-weight:550;margin:6px 0 16px!important}
+.os-heat-day-stats {display:flex;gap:22px;padding-bottom:15px;border-bottom:.5px solid var(--os-glass-shade);flex-wrap:wrap}
+.os-heat-day-stats strong {font-family:var(--os-display);font-size:var(--fs-display);font-weight:300;font-variant-numeric:tabular-nums}
+.os-heat-session-list {padding-top:2px}
+.os-heat-session {display:flex;flex-direction:column;gap:5px;padding:14px 0;border-bottom:.5px solid var(--os-glass-shade)}
+.os-heat-session:last-child {border-bottom:0}
+.os-heat-session-time {display:flex;align-items:baseline;justify-content:space-between;gap:8px}
+.os-heat-session-time strong {font-size:var(--fs-body);font-weight:600;font-variant-numeric:tabular-nums}
+.os-heat-session .os-row-main strong {font-size:var(--fs-body);font-weight:550;overflow-wrap:anywhere}
+.os-knowledge-body {display:grid;grid-template-columns:minmax(220px,.85fr) minmax(0,1.25fr);padding:0;overflow:hidden;scrollbar-gutter:auto}
+.os-note-list {overflow-y:auto;overflow-x:hidden;overscroll-behavior:contain;min-height:0;border-right:.5px solid var(--os-glass-shade);padding:8px 12px}
+.os-root .os-note-row {display:flex;flex-direction:column;align-items:flex-start;gap:3px;padding:10px 12px;text-align:left;width:100%;border:0;border-bottom:.5px solid var(--os-glass-shade);background:transparent;border-radius:12px;box-shadow:none;color:var(--os-ink)}
+.os-root .os-note-row:hover {background:var(--os-fill)}
+.os-note-row strong {font-size:var(--fs-body);font-weight:550;overflow-wrap:anywhere}.os-note-row span{font-size:var(--fs-meta)}
+.os-knowledge-toolbar {flex-wrap:wrap;gap:8px}
+.os-knowledge-toolbar .os-input {flex:1 1 140px;min-width:0;max-width:100%}
+.os-knowledge-toolbar input[type="search"] {flex:2 1 220px}
+.os-root .os-note-row.is-active {background:var(--os-fill);box-shadow:inset 3px 0 var(--os-accent)}
+.os-knowledge-connections {overflow-wrap:anywhere}
+.os-knowledge-connections .os-button {white-space:normal;text-align:left;max-width:100%;margin:3px}
+.os-knowledge-task {display:flex;align-items:center;gap:8px;flex-wrap:wrap;padding:6px 0}
+.os-knowledge-task>span {flex:1 1 180px}
+.os-knowledge-markdown {line-height:1.75;overflow-wrap:anywhere}
+.os-knowledge-markdown img {max-width:100%;height:auto}
+.os-knowledge-markdown pre,.os-knowledge-markdown table,.os-knowledge-markdown .math-block {max-width:100%;overflow-x:auto}
+/* Knowledge map and memory notes have separate information hierarchies. */
+/* 课程首页：只有有课堂笔记的课画卡；卡底一条掌握度色带（能应用 / 已理解 / 需巩固 / 待自评，按个数分宽）。 */
+.os-map-courses {display:grid;grid-template-columns:repeat(auto-fill,minmax(230px,1fr));gap:16px;padding:16px 0 12px;align-content:start}
+.os-root .os-map-course {display:flex;flex-direction:column;align-items:flex-start;text-align:left;white-space:normal;border:1px solid var(--os-line);border-radius:16px;padding:20px;min-height:0;background:var(--os-fill);box-shadow:none;color:var(--os-ink)}
+.os-map-course h3 {font-size:var(--fs-title);line-height:1.4;margin:10px 0 6px}
+.os-map-course p {font-size:var(--fs-meta);margin:0 0 14px}
+.os-map-mastery {display:flex;gap:2px;width:100%;height:5px;margin:0 0 16px;border-radius:3px;overflow:hidden;background:var(--os-glass-recess)}
+.os-map-mastery i {display:block;min-width:4px}
+.os-map-mastery .is-applied {background:var(--os-accent)}
+.os-map-mastery .is-understood {background:var(--os-accent-2)}
+.os-map-mastery .is-review {background:var(--os-pill-warm-ink)}
+.os-map-mastery .is-unknown {background:var(--os-glass-recess)}
+.os-map-enter {color:var(--os-accent);margin-top:auto}
+.os-map-rest {margin:4px 0 0;font-size:var(--fs-meta);color:var(--os-muted)}
+.os-map-layout {display:grid;grid-template-columns:minmax(240px,.9fr) minmax(300px,1.1fr);min-height:0;gap:24px;padding:12px 0}
+.os-map-body {display:flex;flex-direction:column}
+.os-map-layout {flex:1}
+.os-map-courses {overflow-y:auto;min-height:0}
+.os-root .os-map-back {display:none}
+.os-concept-tree,.os-concept-detail {overflow-y:auto;overscroll-behavior:contain;scrollbar-width:thin}
+.os-concept-tree,.os-concept-detail {min-width:0}
+/* 知识点树：一行一个，和课堂笔记阅读栏的目录同一种样子。原来每行一个带边框的大按钮，
+   一门课四五十个知识点要滚好几屏。按第一次讲到的那节课分组，组头是日期。 */
+.os-concept-lecture {margin:16px 0 4px 26px;font-size:var(--fs-meta);font-weight:600;color:var(--os-muted);letter-spacing:.02em}
+.os-concept-lecture:first-child {margin-top:0}
+.os-concept-row {display:flex;align-items:center;gap:2px;min-width:0}
+.os-root .os-concept-toggle {flex:none;width:22px;height:28px;padding:0;box-shadow:none;background:transparent;color:var(--os-muted);font-size:11px}
+.os-root .os-concept-toggle:disabled {visibility:hidden}
+.os-root .os-concept-node {display:flex;align-items:center;gap:9px;flex:1;min-width:0;min-height:30px;white-space:nowrap;text-align:left;border:0;border-radius:8px;background:transparent;box-shadow:none;padding:4px 8px;color:var(--os-body);font-weight:500;line-height:1.4}
+.os-root .os-concept-node:hover {background:var(--os-soft)}
+.os-root .os-concept-node.is-active {background:var(--os-fill);color:var(--os-accent);font-weight:600}
+.os-concept-title {flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis}
+.os-concept-count {flex:none;font-size:var(--fs-meta);font-weight:500;color:var(--os-muted);font-variant-numeric:tabular-nums}
+.os-concept-children {border-left:1px solid var(--os-line);margin-left:10px;padding-left:6px}
+.os-concept-dot {width:8px;height:8px;flex:none;border-radius:50%;border:1.5px solid var(--os-muted);box-sizing:border-box}
+.os-concept-dot.is-applied {background:var(--os-accent);border-color:var(--os-accent)}
+.os-concept-dot.is-understood {background:var(--os-accent-2);border-color:var(--os-accent-2)}
+.os-concept-dot.is-review {background:var(--os-pill-warm-ink);border-color:var(--os-pill-warm-ink)}
+.os-concept-detail {padding:6px 24px 18px;border-left:1px solid var(--os-line);overflow-wrap:anywhere}
+.os-concept-detail h2,.os-memory-detail h2 {font-size:var(--fs-display);line-height:1.4;margin:8px 0 14px}
+.os-concept-detail h3,.os-memory-detail h3 {font-size:var(--fs-body);margin:24px 0 8px}
+.os-root .os-concept-up {padding:0;min-height:0;font-size:var(--fs-meta);color:var(--os-muted)}
+.os-concept-levels {display:inline-flex;flex-wrap:wrap;margin:0 0 14px}
+.os-concept-detail .os-button,.os-memory-detail .os-button {white-space:normal;text-align:left;max-width:100%;overflow-wrap:anywhere}
+.os-root .os-concept-levels .os-button {white-space:nowrap}
+/* 课堂笔记里这一节的正文，就地渲染。 */
+.os-concept-excerpt {margin:18px 0 0;padding:14px 18px;border-radius:var(--os-r-inner);background:var(--os-fill)}
+.os-concept-excerpt .os-overline {margin:0 0 6px}
+.os-concept-excerpt-body {line-height:1.75;color:var(--os-body)}
+.os-concept-excerpt-body>:first-child {margin-top:0}.os-concept-excerpt-body>:last-child {margin-bottom:0}
+.os-concept-excerpt-body img {max-width:100%;height:auto}
+.os-concept-excerpt-body :is(pre,table,.math-block,mjx-container[display="true"]) {max-width:100%;overflow-x:auto}
+.os-concept-subs,.os-concept-examples {display:flex;flex-direction:column;align-items:flex-start;gap:2px}
+.os-concept-relation {display:flex;flex-wrap:wrap;gap:5px;align-items:center}
+.os-concept-sources {margin-top:24px;color:var(--os-muted)}
+.os-concept-sources summary {cursor:pointer}.os-concept-sources .os-button {display:block;margin-top:10px}
+/* ---- 8.0 概念图谱：列表、概念卡、导图 ----
+   掌握度的形状和颜色一起说话：空心（待自评）、叹号（需巩固）、半实心（已理解）、实心（能应用）。 */
+.os-mastery-mark {display:inline-flex;align-items:center;justify-content:center;flex:none;width:13px;height:13px;border-radius:50%;box-sizing:border-box;border:1.5px solid var(--os-mastery-unknown-edge);background:transparent;font:700 9px/1 var(--os-text);color:var(--os-mastery-review-bg)}
+.os-mastery-mark.is-review {border-color:var(--os-mastery-review-edge);background:var(--os-mastery-review-edge)}
+.os-mastery-mark.is-understood {border-color:var(--os-mastery-understood-edge);background:linear-gradient(90deg,var(--os-mastery-understood-edge) 50%,transparent 50%)}
+.os-mastery-mark.is-applied {border-color:var(--os-mastery-applied-edge);background:var(--os-mastery-applied-edge)}
+.os-map-toolbar {display:flex;flex-wrap:wrap;align-items:center;gap:10px 14px;padding:10px 0 4px}
+.os-map-note {font-size:var(--fs-meta)}
+.os-map-host {flex:1;min-height:0;display:flex;flex-direction:column}
+.os-map-stale {margin:-6px 0 12px;font-size:var(--fs-meta);color:var(--os-pill-warm-ink)}
+.os-map-stale.is-quiet {color:var(--os-muted)}
+.os-concept-chapter {margin:18px 0 4px 8px;font-size:var(--fs-meta);font-weight:600;color:var(--os-muted);letter-spacing:.02em}
+.os-concept-chapter:first-child {margin-top:0}
+.os-concept-chapter.is-planned {font-weight:500;padding:4px 8px;margin-left:0;border:1px dashed var(--os-mastery-planned-edge);border-radius:8px;color:var(--os-mastery-planned-ink);background:var(--os-mastery-planned-bg)}
+.os-concept-new {flex:none;padding:0 5px;border-radius:var(--os-r-pill);font-size:10px;line-height:16px;font-weight:600;background:var(--os-pill-green-bg);color:var(--os-pill-green-ink)}
+.os-concept-head {display:flex;align-items:center;gap:10px}.os-concept-head h2 {margin-bottom:4px}
+.os-concept-date {margin:0 0 14px;font-size:var(--fs-meta)}
+.os-concept-basis {margin:-6px 0 16px;font-size:var(--fs-meta);color:var(--os-muted)}
+.os-concept-summary {font-size:var(--fs-title);line-height:1.6;color:var(--os-ink)}
+.os-concept-summary>:first-child,.os-concept-points>:first-child,.os-concept-formulas>:first-child {margin-top:0}
+.os-concept-formulas,.os-concept-points {line-height:1.75;color:var(--os-body)}
+.os-concept-formulas :is(.math-block,mjx-container[display="true"]) {max-width:100%;overflow-x:auto}
+.os-concept-links {display:flex;flex-direction:column;gap:6px;margin:22px 0 0}
+.os-root .os-concept-chip {display:inline-flex;align-items:center;gap:6px;min-height:28px;padding:3px 10px;border-radius:var(--os-r-pill);background:var(--os-fill);box-shadow:none;color:var(--os-ink);font-weight:500}
+details.os-concept-excerpt {padding:12px 18px}
+details.os-concept-excerpt>summary {cursor:pointer;font-weight:600;color:var(--os-body)}
+.os-concept-excerpt-block {margin-top:14px}
+.os-map-layout .os-concept-node .os-mastery-mark {margin-left:2px}
+/* 导图：画布是一个不滚动的视口，舞台在里面平移缩放。节点实底，壁纸上也认得出字。 */
+.os-mind {position:relative;flex:1;min-height:360px;display:flex;overflow:hidden;overflow:clip;border-radius:var(--os-r-inner);outline:none}
+.os-mind:focus-visible {box-shadow:inset 0 0 0 2px var(--os-accent)}
+.os-mind-viewport {position:relative;flex:1;overflow:hidden;overflow:clip;touch-action:none;cursor:grab;user-select:none;-webkit-user-select:none}
+.os-mind-viewport.is-dragging {cursor:grabbing}
+.os-mind-stage {position:absolute;left:0;top:0;transform-origin:0 0;will-change:transform}
+.os-mind-stage.is-animating {transition:transform .35s var(--os-ease)}
+.os-mind-edges,.os-mind-arcs {position:absolute;left:0;top:0;overflow:visible;pointer-events:none}
+.os-mind-edge {fill:none;stroke:var(--os-line);stroke-width:1.5}
+.os-mind-edge.is-chapter {stroke-width:2.2}.os-mind-edge.is-leaf {stroke-width:1}
+.os-mind-edge.is-planned {stroke-dasharray:4 4}
+.os-mind-arc {fill:none;stroke-width:1.8;stroke-dasharray:6 5}
+.os-mind-arc.is-prereq {stroke:var(--os-mastery-review-edge)}.os-mind-arc.is-next {stroke:var(--os-accent)}
+.os-mind-arrow {fill:var(--os-muted)}
+.os-root .os-mind-node {position:absolute;display:inline-flex;align-items:center;gap:7px;white-space:nowrap;min-height:0;margin:0;padding:6px 12px;border-radius:10px;border:1.5px solid var(--os-mastery-unknown-edge);background:var(--os-mastery-unknown-bg);color:var(--os-mastery-unknown-ink);box-shadow:none;font:500 13px/1.35 var(--os-text);cursor:pointer;transition:opacity .2s}
+.os-root .os-mind-node.is-root {padding:10px 18px;border-radius:14px;font-size:16px;font-weight:700;border-color:var(--os-accent);background:var(--os-mastery-unknown-bg);color:var(--os-ink)}
+.os-root .os-mind-node.is-chapter {font-weight:600;border-width:2px;border-color:var(--os-ink)}
+.os-root .os-mind-node.is-chapter.is-collapsed::after {content:"＋";margin-left:2px;color:var(--os-muted)}
+.os-root .os-mind-node.is-planned {border:1.5px dashed var(--os-mastery-planned-edge);background:var(--os-mastery-planned-bg);color:var(--os-mastery-planned-ink);font-weight:500;cursor:default}
+.os-mind-order {font-weight:700}
+.os-root .os-mind-node.is-review {border-color:var(--os-mastery-review-edge);background:var(--os-mastery-review-bg);color:var(--os-mastery-review-ink)}
+.os-root .os-mind-node.is-understood {border-color:var(--os-mastery-understood-edge);background:var(--os-mastery-understood-bg);color:var(--os-mastery-understood-ink)}
+.os-root .os-mind-node.is-applied {border-color:var(--os-mastery-applied-edge);background:var(--os-mastery-applied-bg);color:var(--os-mastery-applied-ink)}
+.os-mind-node.is-applied .os-mastery-mark {border-color:var(--os-mastery-applied-ink);background:var(--os-mastery-applied-ink)}
+.os-root .os-mind-node.is-leaf {padding:3px 10px;border-radius:var(--os-r-pill);border-width:1px;border-color:var(--os-line);font-size:12px;color:var(--os-body)}
+.os-root .os-mind-node.is-selected {box-shadow:0 0 0 3px var(--os-accent)}
+.os-root .os-mind-node.is-focus {outline:2px solid var(--os-accent);outline-offset:3px}
+.os-root .os-mind-node.is-faded,.os-root .os-mind-node.is-dim {opacity:.28}
+.os-mind-controls {position:absolute;top:10px;right:10px;display:flex;gap:4px;z-index:2;transition:right .3s var(--os-ease)}
+.os-mind-controls .os-button {min-height:30px;padding:4px 12px;background:var(--os-mastery-unknown-bg);box-shadow:0 0 0 1px var(--os-line)}
+.os-mind.has-card .os-mind-controls {right:calc(min(400px,90%) + 10px)}
+.os-mind-card {position:absolute;top:0;right:0;bottom:0;width:min(400px,90%);z-index:3;overflow-y:auto;overscroll-behavior:contain;padding:10px 22px 22px;background:var(--os-paper);border-left:1px solid var(--os-line);box-shadow:-12px 0 30px rgba(0,0,0,.10);transform:translateX(102%);visibility:hidden;transition:transform .3s var(--os-ease),visibility 0s .3s;overflow-wrap:anywhere}
+.os-mind.has-card .os-mind-card {transform:none;visibility:visible;transition:transform .3s var(--os-ease)}
+.os-mind-card-head {display:flex;justify-content:flex-end;position:sticky;top:-10px;padding-top:4px;background:var(--os-paper);z-index:1}
+.os-mind-card h2 {font-size:var(--fs-display);line-height:1.35;margin:6px 0 4px}
+.os-mind-card h3 {font-size:var(--fs-body);margin:22px 0 8px}
+.os-mind-card .os-button {white-space:normal;text-align:left;max-width:100%}
+.os-root .os-mind-card .os-concept-levels .os-button {white-space:nowrap}
+/* ---- 周五自测 ----
+   按钮按平板手写笔点按的尺寸给：选项至少 52px 高、整行可点。 */
+.os-quiz-body {display:flex;flex-direction:column;overflow-y:auto;min-height:0}
+.os-quiz-courses {display:grid;grid-template-columns:repeat(auto-fill,minmax(min(230px,100%),1fr));gap:16px;padding:16px 0 12px}
+.os-quiz-course {display:flex;flex-direction:column;align-items:flex-start;gap:6px;padding:20px;border:1px solid var(--os-line);border-radius:16px;background:var(--os-fill)}
+.os-quiz-course h3 {font-size:var(--fs-title);margin:4px 0 0}.os-quiz-course p {margin:0;font-size:var(--fs-meta)}
+.os-quiz-progress {display:block;width:100%;height:5px;margin:6px 0 10px;border-radius:3px;overflow:hidden;background:var(--os-glass-recess)}
+.os-quiz-progress i {display:block;height:100%;background:var(--os-accent)}
+.os-quiz-past {font-size:var(--fs-meta);color:var(--os-muted);display:flex;flex-wrap:wrap;align-items:center;gap:6px}
+.os-quiz-card {max-width:760px;width:100%;margin:8px auto 24px;outline:none}
+.os-quiz-stem {font-size:var(--fs-title);line-height:1.7;color:var(--os-ink);margin:6px 0 18px;overflow-wrap:anywhere}
+.os-quiz-stem>:first-child {margin-top:0}
+.os-quiz-stem :is(pre,table,mjx-container[display="true"]) {max-width:100%;overflow-x:auto}
+.os-quiz-answer {display:flex;flex-direction:column;gap:10px}
+.os-root .os-quiz-option {display:flex;align-items:center;width:100%;min-height:52px;padding:10px 18px;text-align:left;white-space:normal;border-radius:14px;border:1.5px solid var(--os-line);background:var(--os-mastery-unknown-bg);color:var(--os-ink);box-shadow:none;font-size:var(--fs-body);line-height:1.6;cursor:pointer}
+.os-root .os-quiz-option:hover {border-color:var(--os-accent)}
+.os-root .os-quiz-option.is-selected {border-color:var(--os-accent);box-shadow:0 0 0 2px var(--os-accent);font-weight:600}
+.os-quiz-option>span>:is(p,div) {margin:0}
+.os-root .os-quiz-option.is-short {justify-content:center;font-size:var(--fs-title)}
+.os-quiz-numeric {display:flex;align-items:center;gap:10px}
+.os-quiz-numeric .os-input {max-width:220px;min-height:48px;font-size:var(--fs-title)}
+.os-quiz-actions {display:flex;flex-wrap:wrap;gap:10px;justify-content:flex-end;margin-top:22px}
+.os-quiz-actions .os-button {min-height:44px;padding:0 18px}
+.os-quiz-summary {padding:12px 0 8px;border-bottom:1px solid var(--os-line)}
+.os-quiz-summary h2 {font-size:var(--fs-display);margin:4px 0}
+.os-quiz-summary h3 {font-size:var(--fs-body);margin:16px 0 6px}
+.os-quiz-changes {display:flex;flex-direction:column;gap:4px}
+.os-root .os-quiz-change {display:flex;flex-wrap:wrap;justify-content:space-between;gap:8px;width:100%;text-align:left;white-space:normal;padding:6px 10px;border-radius:10px;background:transparent;box-shadow:none;color:var(--os-ink)}
+.os-root .os-quiz-change:hover {background:var(--os-fill)}
+.os-quiz-change-level {display:inline-flex;align-items:center;gap:6px;font-size:var(--fs-meta);color:var(--os-body)}
+.os-quiz-change-level.is-same {color:var(--os-muted)}
+.os-quiz-results {display:flex;flex-direction:column;gap:12px;padding:14px 0 24px}
+.os-quiz-result {padding:14px 18px;border:1px solid var(--os-line);border-left-width:4px;border-radius:12px;overflow-wrap:anywhere}
+.os-quiz-result.is-right {border-left-color:var(--os-mastery-applied-edge)}
+.os-quiz-result.is-wrong {border-left-color:var(--os-mastery-review-edge)}
+.os-quiz-result.is-flagged {border-left-color:var(--os-line);opacity:.8}
+.os-quiz-result-head {display:flex;flex-wrap:wrap;align-items:center;gap:8px;font-size:var(--fs-meta)}
+.os-quiz-mark {display:inline-flex;align-items:center;justify-content:center;width:22px;height:22px;border-radius:50%;font-weight:700;background:var(--os-fill);color:var(--os-ink)}
+.is-right .os-quiz-mark {background:var(--os-mastery-applied-bg);color:var(--os-mastery-applied-ink)}
+.is-wrong .os-quiz-mark {background:var(--os-mastery-review-bg);color:var(--os-mastery-review-ink)}
+.os-quiz-result .os-quiz-stem {font-size:var(--fs-body);margin:8px 0}
+.os-quiz-compare {display:grid;grid-template-columns:auto 1fr;gap:4px 14px;margin:8px 0;font-size:var(--fs-body)}
+.os-quiz-compare dt {color:var(--os-muted)}.os-quiz-compare dd {margin:0}.os-quiz-compare dd>:is(p,div) {margin:0}
+.os-quiz-explanation {padding:10px 14px;border-radius:var(--os-r-inner);background:var(--os-fill);line-height:1.7;color:var(--os-body)}
+.os-quiz-explanation>:first-child {margin-top:0}.os-quiz-explanation>:last-child {margin-bottom:0}
+@media(prefers-reduced-motion:reduce){.os-mind-stage.is-animating,.os-mind-card,.os-mind-controls,.os-root .os-mind-node{transition:none}}
+.os-outcome-toolbar {display:flex;padding-top:8px}.os-outcome-toolbar select {max-width:300px}
+.os-progress-body {overflow-y:auto;display:flex;flex-direction:column;gap:20px}
+.os-progress-list {display:grid;grid-template-columns:repeat(2,minmax(0,1fr));align-items:start;gap:20px;padding-bottom:24px}
+.os-progress-course {min-width:0;padding:24px;border:1px solid var(--os-line);border-radius:18px;background:var(--os-paper);overflow-wrap:anywhere}
+.os-progress-overview {display:flex;justify-content:space-between;align-items:center;gap:24px;padding:8px 4px 12px}
+.os-progress-overview h2 {font-size:var(--fs-display);line-height:1.2;margin:6px 0 10px}
+.os-progress-overview p {margin:0;font-size:var(--fs-meta)}
+.os-progress-total {display:flex;align-items:baseline;gap:10px;flex-shrink:0;color:var(--os-muted)}
+.os-progress-total strong {font-size:var(--fs-display);font-weight:650;color:var(--os-accent);font-variant-numeric:tabular-nums}
+.os-progress-course-head {display:flex;align-items:center;gap:12px;margin-bottom:14px}
+.os-progress-course-head>div {min-width:0}
+.os-progress-course-head .os-overline {margin:0 0 4px;color:var(--os-muted)}
+.os-progress-monogram {display:grid;place-items:center;width:44px;height:44px;flex-shrink:0;border-radius:14px;background:var(--os-accent);color:var(--os-accent-ink);font-size:var(--fs-title);font-weight:650}
+.os-progress-notebook {border:1px solid var(--os-line);border-left:4px solid var(--os-accent);border-radius:12px;padding:16px;margin:16px 0 20px;background:color-mix(in srgb,var(--os-accent) 6%,var(--os-paper))}
+.os-progress-note-heading {display:flex;justify-content:space-between;align-items:baseline;gap:12px;margin-bottom:10px;font-size:var(--fs-meta)}
+.os-root .os-progress-course .os-progress-note {display:flex;align-items:center;justify-content:space-between;gap:14px;width:100%;padding:12px 0;color:var(--os-ink);border-radius:6px;box-shadow:none;background:transparent}
+.os-progress-note+.os-progress-note {border-top:1px solid var(--os-line)}
+.os-progress-note-copy {display:flex;flex-direction:column;gap:8px;min-width:0}
+.os-progress-note-copy strong {font-size:var(--fs-title);font-weight:650;line-height:1.5}
+.os-progress-note-cue {font-size:var(--fs-meta);font-weight:400;line-height:1.6;color:var(--os-muted)}
+.os-progress-note-arrow {flex-shrink:0;color:var(--os-accent);font-size:var(--fs-title)}
+.os-root .os-progress-course .os-progress-note:hover {color:var(--os-accent);background:var(--os-fill)}
+.os-root .os-progress-note:focus-visible {outline:2px solid var(--os-accent);outline-offset:4px}
+.os-progress-note-empty {font-size:var(--fs-meta);line-height:1.6;color:var(--os-muted);margin:12px 0 4px}
+.os-progress-more {font-size:var(--fs-meta);color:var(--os-muted);margin-top:10px}
+.os-progress-inactive {padding:16px 4px;color:var(--os-muted);border-top:1px solid var(--os-line);margin-bottom:20px}
+.os-progress-inactive summary,.os-progress-more summary {cursor:pointer}
+.os-progress-waiting {display:flex;flex-wrap:wrap;gap:8px 20px;padding-top:12px}
+.os-progress-course h3 {font-size:var(--fs-title);line-height:1.4;margin:0 0 8px;color:var(--os-ink)}
+.os-progress-position {margin:0 0 20px;font-size:var(--fs-meta)}
+.os-progress-row {display:grid;grid-template-columns:100px minmax(0,1fr);align-items:baseline;gap:10px;margin:10px 0}
+.os-progress-label {font-size:var(--fs-meta);color:var(--os-muted)}
+.os-progress-concepts,.os-progress-actions {display:flex;flex-wrap:wrap;gap:4px 12px}
+.os-root .os-progress-course .os-button {white-space:normal;text-align:left;overflow-wrap:anywhere;max-width:100%;height:auto;min-height:36px;padding:6px 0}
+.os-progress-empty {color:var(--os-muted);font-size:var(--fs-body);line-height:1.6}
+.os-progress-actions {margin-top:20px;padding-top:12px;border-top:1px solid var(--os-line)}
+.os-root .os-progress-actions .os-button {font-size:var(--fs-meta)}
+.os-progress-archive {margin-top:14px;font-size:var(--fs-meta);color:var(--os-muted)}
+.os-progress-archive summary {cursor:pointer}
+.os-progress-archive[open] .os-button {display:block}
+@media(max-width:900px){.os-progress-list {grid-template-columns:minmax(0,1fr)}.os-progress-course {padding:18px}}
+@media(max-width:480px){.os-progress-row {grid-template-columns:minmax(0,1fr);gap:2px}}
+.os-outcome-layout {display:grid;grid-template-columns:minmax(200px,.8fr) minmax(0,1.2fr);gap:28px;padding-bottom:24px}
+.os-memory-cards {display:flex;flex-direction:column;gap:12px;min-width:0}
+.os-root .os-memory-card {display:block;width:100%;text-align:left;white-space:normal;padding:20px;border:1px solid var(--os-line);border-radius:14px;background:transparent;box-shadow:none;color:var(--os-ink)}
+.os-root .os-memory-card.is-active {border-color:var(--os-accent);background:var(--os-fill)}
+.os-memory-card h3 {font-size:var(--fs-title);line-height:1.5;margin:12px 0}
+.os-memory-card p {margin:0;font-size:var(--fs-meta)}
+.os-memory-detail {padding:12px 24px;border-left:1px solid var(--os-line);min-width:0;overflow-wrap:anywhere}
+.os-memory-answer {line-height:1.75;margin:20px 0}
+.os-memory-answer img {max-width:100%;height:auto}
+.os-memory-answer pre,.os-memory-answer table {max-width:100%;overflow-x:auto}
+.os-memory-editor {display:flex;flex-direction:column;gap:14px;max-height:80vh;overflow-y:auto}
+.os-memory-field {display:flex;flex-direction:column;gap:6px}.os-memory-field textarea {resize:vertical;min-height:70px}
+.os-memory-concepts {max-height:180px;overflow-y:auto;border:1px solid var(--os-line);padding:12px;border-radius:10px}
+.os-memory-check {display:flex;gap:8px;align-items:center;margin:8px 0}
+.os-memory-error {color:var(--text-error);margin:0}
+@container os-root (max-width:800px) {
+  .os-map-layout,.os-outcome-layout {grid-template-columns:minmax(0,1fr);gap:18px}
+  .os-map-layout {display:flex;flex-direction:column}
+  .os-map-layout .os-concept-tree {flex:1}
+  .os-map-layout .os-concept-detail {display:none;flex:1}
+  .os-map-layout.has-concept .os-concept-tree {display:none}
+  .os-map-layout.has-concept .os-concept-detail {display:block}
+  .os-root .os-map-back {display:inline-flex;margin-bottom:16px}
+  .os-concept-detail,.os-memory-detail {border-left:0;border-top:1px solid var(--os-line);padding:20px 0}
+  .os-map-courses {grid-template-columns:minmax(0,1fr)}
+  .os-concept-children {padding-left:4px;margin-left:9px}
+  .os-mind-card {width:100%;border-left:0}
+  .os-mind.has-card .os-mind-controls {right:10px;visibility:hidden}
+}
+.os-note-detail {overflow-y:auto;overflow-x:hidden;overscroll-behavior:contain;min-height:0;padding:28px;background:transparent}
+.os-note-detail h2 {font-size:var(--fs-display);margin:12px 0;overflow-wrap:anywhere}.os-note-detail h3{font-size:var(--fs-body);margin:25px 0 8px}
+.os-detail-actions {display:flex;gap:8px;margin:20px 0;flex-wrap:wrap}
+.os-excerpt {white-space:pre-wrap;overflow-wrap:anywhere;font-family:inherit;font-size:var(--fs-body);line-height:1.9;background:transparent;padding:0;color:var(--os-ink)}
+.os-root .os-related {display:block;text-align:left}.os-tag{font-size:var(--fs-meta);color:var(--os-muted);flex:none}
+.os-mobile-switch,.os-mobile-back {display:none!important}
+.os-modules .os-file-row{justify-content:space-between}.os-modules h2{margin-top:0}
+@container (max-width:1150px) {
+  .os-app{grid-template-columns:155px minmax(0,1fr)}.os-rail{padding:24px 10px 14px}.os-wordmark{font-size:12px}
+  .os-main{--main-pt:22px;--main-px:22px;padding-bottom:8px;gap:16px}.os-today-grid{gap:16px;grid-template-columns:minmax(0,1fr) minmax(0,.9fr) minmax(0,1.3fr)}
+  .os-today-col{gap:16px}.os-panel-head{padding:17px 16px 12px}.os-panel-body{padding-left:16px;padding-right:16px}
+  .os-intent{padding:17px}.os-metrics{gap:20px}.os-metrics>div{flex-direction:column;gap:0}.os-metrics strong{font-size:25px}
+  /* 动作竖排是为「在流里、行又窄」那个旧状态准备的。7.0 改成浮层之后
+     它不再占行宽，竖排只会让这一块变高、顶进工具条。留一行排。 */
+  .os-task-row{gap:9px}
+  .os-toolbar{padding:0 16px 14px}.os-knowledge-body{padding:0}
+}
+@container (max-width:800px) {
+  .os-root{--fs-display:23px;--fs-title:15px;--fs-body:12px;--fs-meta:10px;--fs-timer:60px}
+
+  .os-app{grid-template-columns:64px minmax(0,1fr)}.os-rail{padding:20px 8px 10px;gap:25px;align-items:center}
+  .os-wordmark,.os-nav-label,.os-local,.os-nav-heading,.os-widgets-top,.os-widgets-bottom{display:none!important}.os-nav{width:100%}.os-nav-group+.os-nav-group{margin-top:8px;border-top:1px solid var(--os-line);padding-top:8px}.os-root .os-nav-button{padding:10px;justify-content:center}
+  .os-rail-foot{width:100%}.os-root .os-rail-foot .os-button{font-size:10px;padding:6px 3px;min-height:42px}
+  .os-main{--main-pt:18px;--main-px:16px;padding-bottom:8px;gap:14px}
+  /* 三栏折成两栏：专注独占左侧整列，要务和行动在右侧上下叠。
+     三栏在这个宽度下各剩 250px 出头，表盘和任务行都挤到没法读。 */
+  .os-today-grid{gap:12px;grid-template-columns:minmax(0,.95fr) minmax(0,1.05fr);
+    grid-template-rows:auto minmax(0,1fr);
+    grid-template-areas:"focus intent" "focus actions"}
+  .os-heading h1{font-size:21px}.os-header-actions .os-quiet{display:none}.os-header{gap:8px}.os-panel-head h2{font-size:15px}
+  .os-widgets-header{display:none!important}
+  .os-today-col{gap:12px}.os-stat-tiles{gap:6px}.os-focus .os-overline{letter-spacing:.5px;font-size:8px}
+  .os-knowledge-body{grid-template-columns:minmax(180px,.9fr) minmax(0,1fr)}.os-note-detail{padding:20px}
+}
+@container (max-width:650px) {
+  /* 窄屏多为触摸，没有 hover 态，动作常驻显示——也就回到正常流里排，
+     不再浮在行上（浮起来会盖住本来就窄的标题）。 */
+  .os-row-actions{position:static;transform:none;background:none;padding-left:0;
+    opacity:1;pointer-events:auto}
+  .os-root{--fs-display:20px;--fs-title:15px;--fs-body:12px;--fs-meta:10px;--fs-timer:60px}
+
+  .os-main{--main-pt:16px;--main-px:12px;padding-bottom:7px;gap:12px}.os-heading h1{font-size:19px}
+  .os-header-actions button{font-size:10px!important;padding:7px!important}.os-content{gap:10px}
+  .os-mobile-switch{display:flex!important;gap:8px;flex:none}.os-mobile-switch button{flex:1}
+  .os-today-grid{display:flex;flex-direction:column}.os-today-col{width:100%;flex:1}
+  /* 「今日行动」那一档给要务和行动，「专注与阅读」那一档给专注栏。 */
+  .os-mobile-actions .is-focus,.os-mobile-focus .is-intent,.os-mobile-focus .is-actions{display:none}
+  .os-intent{padding:15px}.os-metrics{justify-content:space-between}.os-metrics>div{flex-direction:row;align-items:baseline;gap:6px}
+  .os-toolbar{gap:10px}.os-toolbar>.os-input{max-width:none;width:100%}.os-root .os-segments button{font-size:11px;padding:6px 8px}
+  .os-panel-head{padding:14px}.os-panel-head .os-overline{font-size:8px;letter-spacing:.6px}.os-panel-body{padding-left:14px;padding-right:14px}
+  .os-file-row{flex-wrap:wrap;gap:8px}.os-file-row>.os-row-main{flex-basis:100%}.os-task-row{flex-wrap:wrap}.os-row-main{flex-basis:65%}.os-row-actions{flex-direction:row;margin-left:30px}
+  .os-course-grid{grid-template-columns:minmax(0,1fr)}.os-panel-head h2{font-size:16px}.os-empty{padding:24px 4px}
+  .os-knowledge-body{display:flex;padding:0}.os-note-list{width:100%;border:0}.os-note-detail{display:none;width:100%}
+  .os-knowledge-body.has-selection .os-note-list{display:none}.os-knowledge-body.has-selection .os-note-detail{display:block}
+  .os-mobile-back{display:inline-flex!important}.os-note-detail h2{font-size:20px}
+  
+}
+@container (max-height:660px) {
+  .os-root{--fs-timer:60px}
+
+  .os-main{--main-pt:14px;gap:12px}.os-rail{padding-top:16px;gap:20px}.os-nav{gap:3px}.os-root .os-nav-button{padding-top:10px;padding-bottom:10px}
+  .os-intent{padding:13px 16px}.os-metrics strong{font-size:23px}.os-panel-head{padding-top:12px;padding-bottom:10px}
+  .os-focus .os-panel-body{padding-top:0}.os-dial{width:min(46cqw,168px)}.os-beads{margin-bottom:10px}.os-modes{margin-bottom:9px}.os-resume{flex-basis:130px}
+  .os-today-col{gap:12px}
+}
+@media(prefers-reduced-motion:reduce){.os-root *{transition:none!important;animation:none!important}}
+
+/* Workbench-owned dialogs. Keep one bounded scroll owner so controls never cover text. */
+.cw-capture-modal,.cw-completion-modal,.cw-environment-modal,.cw-study-overview-modal,.os-project-modal,.os-modules-modal {box-sizing:border-box;min-width:0;max-height:calc(100vh - 48px);overflow-x:hidden;overflow-y:auto;padding-bottom:14px}
+.modal:has(.cw-capture-modal),.modal:has(.cw-completion-modal),.modal:has(.cw-environment-modal),.modal:has(.cw-study-overview-modal),.modal:has(.os-project-modal),.modal:has(.os-modules-modal) {max-height:calc(100vh - 32px)}
+.modal:has(.cw-capture-modal) .modal-content,.modal:has(.cw-completion-modal) .modal-content,.modal:has(.cw-environment-modal) .modal-content,.modal:has(.cw-study-overview-modal) .modal-content,.modal:has(.os-project-modal) .modal-content,.modal:has(.os-modules-modal) .modal-content {box-sizing:border-box;min-width:0}
+.cw-capture-modal h2,.cw-completion-modal h2,.cw-environment-modal h2,.cw-study-overview-modal h2,.os-project-modal h2,.os-modules-modal h2 {line-height:1.3;overflow-wrap:anywhere}
+.cw-capture-modal .cw-muted{font-size:12px;color:var(--text-muted);line-height:1.6}
+.cw-countdown-field{display:flex;flex-direction:column;gap:8px;margin:14px 0}.cw-countdown-field input{width:100%}
+.cw-course-picker{max-height:200px;overflow:auto}.cw-course-book-choice{display:flex;align-items:flex-start;gap:8px;padding:6px 0;overflow-wrap:anywhere}
+/* display:flex 会盖掉浏览器默认的 [hidden]{display:none}，不补这一条，筛选框打了字也没反应 */
+.cw-course-book-choice[hidden]{display:none}
+.cw-course-book-choice input{flex-shrink:0}.cw-library-search{width:100%;margin:0 0 10px}.cw-library-results{max-height:50vh;overflow:auto}
+/* 选教材弹窗：整行是一个按钮，书名一行、路径一行，筛掉的直接不占位。 */
+.cw-course-book-open{display:flex;align-items:baseline;gap:10px;width:100%;text-align:left;margin:0 0 4px;overflow-wrap:anywhere}
+.cw-course-book-open[hidden]{display:none}
+.cw-course-book-main{display:flex;flex-direction:column;gap:2px;flex:1;min-width:0}
+.cw-course-books-header{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-right:28px}
+.cw-course-books-header h2{min-width:0;margin:0 0 12px}
+.cw-open-course-folder{flex:none;margin-bottom:12px;font-size:12px}
+.cw-modal-actions{display:flex;flex-wrap:wrap;gap:10px;margin-top:14px;padding-top:10px;border-top:1px solid var(--background-modifier-border,var(--os-line))}.cw-button{cursor:pointer;min-height:30px;height:auto;padding:6px 10px;white-space:normal;box-shadow:none}
+.cw-modal-actions .cw-primary{background:var(--os-accent-2);color:var(--os-paper)}.cw-reading-controls{display:flex;gap:4px}.cw-reading-controls .cw-button{min-height:20px;font-size:11px;padding:2px 6px}
+.cw-return-home a{color:var(--os-accent-2)}
+
+/* v4.5: panel scroll containment and header wrapping at narrow widths. */
+.os-panel-body,.os-note-list,.os-note-detail {overscroll-behavior:contain;scrollbar-width:thin}
+.os-header-actions {flex-wrap:wrap;justify-content:flex-end;flex:0 1 46%}
+.os-focus .os-tools {flex-wrap:wrap;justify-content:flex-end}
+.os-heading {flex:1;min-width:0}
+@container (max-width:650px) {
+  .os-header {align-items:flex-start}
+  .os-header-actions {flex-basis:40%;gap:4px}
+}
+/* 矮窗口收起左栏那两块挂件。它们 flex-basis 为 0、自带滚动，不收也挤不出底部按钮，
+   但一块 40px 高、要滚三下才看得完的挂件区没有存在的意义。
+   页头那块不在此列——它是横排的一行，不占左栏的高度，窗口再矮也不碍事。 */
+@container (max-height:560px) { .os-widgets-top,.os-widgets-bottom {display:none!important} }
+@container (max-height:480px) {
+  .os-root{--fs-display:20px;--fs-title:15px;--fs-timer:48px}
+
+  .os-rail {gap:8px;padding:6px;overflow:hidden}
+  .os-nav-heading {padding-bottom:2px}
+  .os-root .os-nav-button {padding:6px 10px}
+  .os-main {--main-pt:6px;gap:6px}
+  .os-heading h1 {font-size:17px}
+  .os-today-col {overflow-y:auto;overscroll-behavior:contain}
+  .os-today-col>.os-grow {flex:none;min-height:220px}
+  .os-resume {flex:none}
+}
+/* A document owns its H1; hide only Obsidian's duplicate display title.
+   This also works in an exported vault without requiring a plugin setting. */
+.markdown-preview-view:has(h1) .inline-title,
+.markdown-source-view:has(.cm-header-1) .inline-title {display:none}
+
+/* 课堂笔记（frontmatter 里 cssclasses: class-note）。
+   独立公式放大一档、上下留白，太长就在自己那一块里横向滚，不把整页撑宽——
+   平板竖屏上一条展开的矩阵就比页面宽。插图居中、限宽，圆角和卡内块同一个 14。 */
+.class-note mjx-container[display="true"] {font-size:112%;margin:.9em 0!important;padding:.3em 0;max-width:100%;overflow-x:auto;overflow-y:hidden}
+.class-note mjx-container:not([display="true"]) {font-size:104%}
+.class-note .math-block {max-width:100%;overflow-x:auto;overflow-y:hidden}
+.class-note .image-embed img {display:block;max-width:100%;height:auto;margin:10px auto;border-radius:14px;box-shadow:0 1px 4px rgb(0 0 0 / .14)}
+
+/* v4.6 context, focus projection and inline actions */
+.workspace-leaf-content[data-type="markdown"] :is(.markdown-preview-view,.markdown-source-view) .metadata-container {display:none!important}
+.workspace-leaf-content[data-type="markdown"] {position:relative}
+.os-floating-return {position:absolute;right:22px;bottom:18px;z-index:8;box-shadow:0 2px 10px #0002;background:var(--background-primary);color:var(--text-accent);border:1px solid var(--background-modifier-border);border-radius:9px;padding:8px 12px}
+.workspace-leaf-content[data-type="markdown"] .markdown-preview-sizer {padding-bottom:64px!important}
+.os-header-actions {flex-basis:42%}
+.os-task-row {flex-wrap:wrap}
+.os-task-row[data-focus="true"] {border-inline-start:4px solid var(--os-accent-2);padding-left:10px;background:var(--os-soft)}
+.os-task-row[data-budget="over"] .os-budget {color:var(--os-danger);font-weight:650}
+.os-task-row[data-budget="near"] .os-budget {color:var(--os-accent-2)}
+.os-budget {overflow-wrap:anywhere;white-space:normal}
+.os-project-editor {flex-basis:100%;width:100%;max-width:100%;padding:12px;border:1px solid var(--os-line);border-radius:8px;background:var(--os-soft);display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
+.os-editor-field {display:flex;flex-direction:column;gap:5px;font-size:12px}
+.os-editor-field textarea {resize:vertical;min-height:60px;max-height:200px}
+.os-editor-field .os-input {width:100%}
+.os-save-state {font-size:12px;overflow-wrap:anywhere;color:var(--os-accent-2)}
+.os-project-fields {display:grid;grid-template-columns:minmax(0,1fr);gap:8px;grid-column:1/-1;min-width:0;max-width:100%}
+.os-quick-task {display:flex;gap:8px;width:100%}.os-quick-task input {flex:1}
+.os-focus-widget {display:flex;flex-wrap:wrap;gap:6px;align-items:center;margin:8px 0;max-height:150px;overflow:auto;overscroll-behavior:contain}
+.os-focus-widget>strong {width:100%;font-size:18px;line-height:1.35;overflow-wrap:anywhere}
+.os-focus-widget>p {width:100%;font-size:11px}
+.os-focus-widget>select {flex:1;width:120px}
+.os-focus-widget[data-focus="true"]>strong {color:var(--os-accent-2)}
+.os-course-intent-title{display:block;margin:8px 0 2px;font-size:18px;line-height:1.3;overflow-wrap:anywhere;color:var(--os-ink)}
+.os-course-intent-meta,.os-course-intent-empty{margin:0;color:var(--text-muted);font-size:12px;line-height:1.5}
+.os-course-intent-actions{display:flex;flex-wrap:wrap;gap:6px;margin-top:10px}
+.os-course-intent-actions .os-quiet{font-size:12px}
+@container (max-width:650px){
+ .os-heading h1{font-size:19px}
+ .os-project-editor{grid-template-columns:minmax(0,1fr)}
+ .os-focus-widget>strong{font-size:15px}.os-focus-widget{max-height:135px}
+ .os-intent{padding:12px}.os-intent .os-metrics{gap:8px}
+}
+@container (max-height:600px){
+ .os-heading h1{font-size:17px}.os-page-status{display:none}
+ .os-focus-widget{max-height:110px}.os-today-col{overflow-y:auto;overscroll-behavior:contain}
+ .os-today-col>.os-grow{flex:none;min-height:200px}
+}
+
+/* Learning OS 5.0 */
+.os-root .os-focus-picker {font-size:13px;color:var(--text-muted);margin:8px 0;}
+.os-root .os-focus-picker summary {cursor:pointer;padding:6px 0;}
+.os-root .os-focus-picker .os-input {margin-top:8px;max-width:100%;}
+/* 项目名原来 36px、比页标题还大，层级倒过来了。现在是卡内标题那一级的放大版。 */
+.os-root .os-project-title {font-family:var(--os-display);font-size:22px;font-weight:700;line-height:1.3;color:var(--os-ink);margin:4px 0 12px;}
+.os-root .os-project-container {padding:18px 0;border-top:.5px solid var(--os-glass-shade);}
+.os-root .os-project-container:first-child {border-top:0;padding-top:4px}
+.os-project-actions {display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:12px}
+.os-root .os-project-actions .os-project-delete {margin-left:auto;color:var(--os-danger)}
+.os-project-progress {display:flex;flex-direction:column;gap:2px;margin:12px 0 6px;font-size:var(--fs-meta);color:var(--os-muted);max-width:420px}
+/* 课堂回顾：上次 / 今天 / 下次三栏，下面一整行是更早还没写完的（没有就不画）。
+   行的样子跟课表页「本学期课程」那一列同一套：色块、课名、右边一格状态。 */
+.os-root .os-main:has(.os-page-daily) {gap:10px}
+.os-root .os-ledger-panel .os-panel-head {padding:12px 14px}
+/* 一屏放下，不滚：账本和欠账按内容高，热力那一行拿剩下的全部高度，格子按宽和高里小的那个定边长。
+   当日记录、很长的欠账在自己的卡里滚。窄屏（一栏竖排）放不下，退回整页滚。 */
+.os-root .os-ledger-panel>.os-panel-head[hidden] {display:none}
+.os-root .os-ledger-panel>.os-panel-body {display:flex;flex-direction:column;padding-top:16px}
+.os-root .os-ledger {display:grid;grid-template-columns:repeat(3,minmax(0,1fr));grid-template-rows:auto minmax(200px,1fr);flex:1 0 auto;gap:12px}
+.os-root .os-ledger.has-backlog {grid-template-rows:auto auto minmax(200px,1fr)}
+.os-root .os-ledger-backlog .os-ledger-list {max-height:100px;overflow-y:auto;overscroll-behavior:contain}
+.os-root .os-heat-chart {container-type:size;min-height:0;overflow:hidden}
+.os-root .os-heat-detail {min-height:0;overflow-y:auto;overscroll-behavior:contain;contain:size}
+.os-heatmap-hint {margin-left:8px}
+.os-root .os-ledger-col {display:flex;flex-direction:column;gap:2px;min-width:0;border-radius:var(--os-r-inner);background:var(--os-fill);padding:12px 10px}
+.os-root .os-ledger-backlog {grid-column:1/-1}
+.os-ledger-head {display:flex;flex-wrap:wrap;align-items:baseline;gap:4px 8px;padding:0 8px 6px;min-width:0}
+.os-ledger-head h3 {margin:0;font-size:var(--fs-body);font-weight:650;color:var(--os-ink)}
+.os-ledger-head span {font-size:var(--fs-meta);color:var(--os-muted);white-space:nowrap}
+.os-ledger-none {margin:0;padding:6px 8px;font-size:var(--fs-body);color:var(--os-muted)}
+.os-root .os-ledger-row {display:grid;grid-template-columns:10px minmax(0,1fr) auto;align-items:center;gap:10px;
+  width:100%;min-height:48px;padding:6px 8px;margin:0;border:0;border-radius:8px;background:transparent;box-shadow:none;text-align:left;color:var(--os-body)}
+.os-root .os-ledger-row:hover {background:var(--os-soft)}
+/* 下一节还没有任何笔记可翻时整行不可点，但字照样要认得出：不吃按钮默认的半透明。 */
+.os-root .os-ledger-row:disabled {opacity:1}
+.os-root .os-ledger-row:disabled:hover {background:transparent}
+.os-ledger-main {display:flex;flex-direction:column;min-width:0;line-height:1.3}
+.os-ledger-main strong {font-size:var(--fs-body);font-weight:600;color:var(--os-ink);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.os-ledger-main span {font-size:var(--fs-meta);color:var(--os-muted);font-variant-numeric:tabular-nums;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.os-ledger-state {display:flex;flex-direction:column;align-items:flex-end;gap:3px}
+.os-ledger-state .os-read-track {width:64px;margin-top:2px}
+.os-ledger-pages {font-size:var(--fs-meta);color:var(--os-muted);font-variant-numeric:tabular-nums;white-space:nowrap}
+.os-ledger-list {display:grid;grid-template-columns:repeat(auto-fill,minmax(min(280px,100%),1fr));gap:2px 12px}
+.os-note-course {display:flex;align-items:center;gap:10px;cursor:pointer}
+.os-note-course input {margin:0}
+/* 学习热力是账本下面那一行：方格占两栏，右边一栏是选中那天的时段。卡里的正文和卡头左边对齐。 */
+.os-root .os-heat-chart {grid-column:span 2}
+/* 格子高度那一项要在方格那一行（.os-heatmap-line）上先算成像素：没注册的自定义属性是到用的地方才展开，
+   而用的地方最近的容器是那一行自己，它只量宽不量高，cqh 就退回视口高，格子永远是 30。注册成 <length>，
+   在这一行上算，最近的量高容器才是热力卡。 */
+@property --heat-h {syntax:"<length>";inherits:true;initial-value:30px}
+.os-root .os-heat-chart .os-heatmap-line {--heat-h:calc((100cqh - 144px) / 7)}
+/* 周数由脚本按宽度定（--heat-weeks，见 heatAxes）：宽度那一项按实际周数分。36 = 星期列 24 + 缝 9 + 左右留白 8 − 一道格缝 5。 */
+.os-root .os-heat-chart .os-heatmap-line>* {--heat-cell:clamp(8px,min(calc((100cqw - 36px) / var(--heat-weeks, 12) - 5px),var(--heat-h)),40px)}
+/* 格子上限 40（今日页的小图和窄屏仍是 30）：周数跟着宽度走之后，上限只管高度，30 会在卡底留一截空。图例跟着图走，不甩到最右边。 */
+.os-root .os-heat-chart .os-heatmap-legend {justify-content:flex-start;margin-top:12px}
+/* 矮窗口里格子缩到 8px，「7月」只剩半个字。月份标签只在每月第一周那一列，右边几列都空着，让它伸过去。 */
+.os-root .os-heat-chart .os-heatmap-months span {overflow:visible}
+.os-root .os-heat-chart>:not(header),.os-root .os-heat-detail>:not(header) {margin-left:8px;margin-right:8px}
+.os-ledger-tools {display:flex;gap:2px;margin-left:auto}
+/* 卡头里的按钮不比标题高：「今天」那一栏多一个「选择课程」，行就不该比「上次」「下次」低一截。 */
+.os-root .os-ledger-tools .os-button {min-height:0;height:auto;padding:0 6px;line-height:inherit}
+.os-root .os-heat-detail .os-heat-day-title {margin:2px 8px 12px!important}
+/* 三栏各剩不到 230px 时，课名和状态挤在一行里放不下：竖着排，上次、今天、下次从上往下读。 */
+@container os-root (max-width:800px) {.os-root .os-ledger,.os-root .os-ledger.has-backlog{grid-template-columns:minmax(0,1fr);grid-template-rows:none;flex:none}.os-root .os-heat-chart{grid-column:auto;container-type:normal;overflow:visible}.os-root .os-heat-detail{overflow:visible;contain:none}.os-root .os-heat-chart .os-heatmap-line>*{--heat-cell:clamp(8px,calc((100cqw - 96px) / 12),30px)}}
+/* 手机宽度下方格只有一栏宽：十二周每格至少 8px 加 5px 的缝放不下。缝收到 3px，卡里不再额外缩进。
+   这两处断点都点名问 .os-root：不点名的话，方格里的元素问的是离它最近的容器——方格那一行自己，
+   桌面上它也常常不到 650 宽，手机的规则就在桌面上生效了。 */
+@container os-root (max-width:650px) {
+  .os-root .os-heat-chart>:not(header) {margin-left:0;margin-right:0}
+  .os-root .os-heat-chart :is(.os-heatmap-weekdays,.os-heatmap-months,.os-heatmap-grid) {gap:3px}
+  .os-root .os-heat-chart .os-heatmap-line>* {--heat-cell:clamp(6px,calc((100cqw - 74px) / 12),30px)}
+}
+
+.os-project-editor .os-project-title{font-size:var(--fs-display);font-weight:700;line-height:1.3;}
+.modal:has(.os-project-editor){width:min(720px,94vw);max-height:calc(100vh - 32px);}
+.modal-content:has(.os-project-editor){box-sizing:border-box;max-height:calc(100vh - 48px);min-width:0;overflow-x:hidden;overflow-y:auto;padding-bottom:18px;}
+
+/* V5.1.5: project management uses the same bounded-scroll contract as task dialogs. */
+.modal:has(.os-project-modal){height:min(calc(100vh - 32px),760px);height:min(calc(100dvh - 32px),760px);}
+.modal:has(.os-project-modal) .modal-content{height:100%;max-height:none;display:flex;flex-direction:column;overflow:hidden;padding:16px;}
+.os-project-modal{box-sizing:border-box;display:flex;flex-direction:column;height:100%;min-height:0;min-width:0;overflow:hidden;padding:16px;}
+.os-project-modal>.os-project-editor{display:flex;flex:1;flex-direction:column;min-height:0;min-width:0;overflow:hidden;gap:12px;padding:0;border:0;background:transparent;}
+.os-project-create-row{display:grid;grid-template-columns:minmax(0,1.4fr) minmax(0,1fr) auto;align-items:center;gap:10px;flex:none;min-width:0;}
+.os-project-create-row>.os-input{display:block;width:100%;max-width:100%;}
+.os-project-fields{display:grid;grid-template-columns:minmax(0,1fr);grid-column:auto;align-content:start;flex:1;min-height:0;min-width:0;max-width:100%;overflow-x:hidden;overflow-y:auto;padding:2px 2px 14px;}
+.os-project-fields>.os-editor-field{min-width:0;max-width:100%;}
+.os-project-fields>.os-editor-field input{box-sizing:border-box;width:100%;max-width:100%;}
+.os-project-editor-actions{display:flex;flex-wrap:wrap;justify-content:flex-end;gap:8px;flex:none;padding-top:10px;border-top:1px solid var(--os-line);}
+.os-root .os-danger,.os-project-modal .os-danger{color:var(--os-danger);}
+@media(max-width:600px){
+  .os-project-create-row{grid-template-columns:minmax(0,1fr);align-items:stretch;}
+  .os-project-editor-actions{justify-content:stretch;}
+  .os-project-editor-actions>.os-button{flex:1 1 140px;}
+}
+
+/* ============================================================
+   补充详情弹窗（5.2）
+   诉求：一屏看完、尽量不滚。整体限高在视口内，头部与操作区固定，
+   六个字段两列排布；只有子任务多到放不下时，才在自己的区域内滚动。
+   弹窗渲染在 .os-root 之外，所以这里只能用 Obsidian 原生变量。
+   ============================================================ */
+/* 不写死高度：没有子任务时弹窗贴着内容收窄，子任务多到超过上限才由列表自己滚。
+   限高要沿 flex 链一路传到 .os-detail-list，中间任何一层缺 min-height:0，
+   溢出就会被 overflow:hidden 裁掉而不是变成滚动。 */
+.modal:has(.os-detail-modal){width:min(680px,94vw);max-height:min(calc(100vh - 32px),680px);max-height:min(calc(100dvh - 32px),680px);display:flex;flex-direction:column;min-height:0;}
+.modal:has(.os-detail-modal) .modal-content{flex:1 1 auto;max-height:none;min-height:0;min-width:0;display:flex;flex-direction:column;overflow:hidden;padding:16px;}
+.os-detail-modal{box-sizing:border-box;flex:1 1 auto;display:flex;flex-direction:column;gap:12px;min-height:0;min-width:0;overflow:hidden;}
+.os-detail-modal *{box-sizing:border-box;min-width:0;}
+
+.os-detail-head{flex:none;display:flex;flex-direction:column;gap:3px;}
+.os-detail-modal h2{margin:0;font-size:17px;line-height:1.3;overflow-wrap:anywhere;}
+.os-detail-source{margin:0;font-size:11px;line-height:1.5;color:var(--os-muted);overflow-wrap:anywhere;}
+
+.os-detail-form{flex:1 1 auto;min-height:0;display:flex;flex-direction:column;gap:12px;overflow:hidden;}
+.os-detail-grid{flex:none;display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px 14px;}
+.os-detail-grid .os-editor-field{min-width:0;max-width:100%;}
+.os-detail-grid .os-editor-field.is-wide{grid-column:1/-1;}
+.os-detail-grid input,.os-detail-grid textarea{width:100%;max-width:100%;font-size:13px;}
+/* 补充详情是一张密表单：弹窗皮肤给的 36px 输入框在这里太高，窄窗口下五个字段竖排，
+   表单体就滚起来了（闸门在 420×720 抓到）。这一处收成 30px。 */
+.modal .os-detail-modal :is(input:not([type=checkbox]):not([type=radio]):not([type=range]),textarea,select){min-height:30px;padding:5px 10px;border-radius:10px}
+.os-detail-grid textarea{min-height:58px;max-height:34vh;resize:vertical;}
+
+.os-detail-checklist{flex:1 1 auto;min-height:0;display:flex;flex-direction:column;gap:6px;}
+.os-detail-checklist h3{margin:0;font-size:12px;font-weight:600;color:var(--text-muted);flex:none;}
+.os-detail-list{flex:1;min-height:0;overflow-y:auto;display:flex;flex-direction:column;gap:4px;}
+.os-detail-check{display:flex;align-items:flex-start;gap:8px;font-size:12px;line-height:1.5;}
+.os-detail-check input{flex:none;margin-top:2px;}
+
+.os-detail-notes{flex:none;display:flex;flex-direction:column;gap:3px;font-size:11px;line-height:1.5;color:var(--text-muted);}
+.os-detail-notes p{margin:0;overflow-wrap:anywhere;}
+
+.os-detail-actions{flex:none;display:flex;align-items:center;gap:8px;flex-wrap:wrap;padding-top:10px;border-top:.5px solid var(--os-glass-shade);}
+.os-detail-actions .os-save-state{margin-right:auto;font-size:12px;overflow-wrap:anywhere;}
+.os-detail-actions button{min-height:30px;font-size:var(--fs-body);cursor:pointer;}
+
+@media(max-width:640px){
+  .os-detail-grid{grid-template-columns:minmax(0,1fr);gap:6px;}
+  .os-detail-grid textarea{min-height:48px;}
+  .os-detail-grid textarea{max-height:26vh;}
+  .os-detail-actions .os-save-state{margin-right:0;flex-basis:100%;}
+}
+
+/* 开工前问一次估算的弹窗。它只该占一小块地方——这是一个按一下就过的问题，
+   不是一张表单。 */
+.os-estimate-modal {max-width:420px}
+.os-estimate-modal h2 {margin-bottom:6px}
+.os-estimate-modal .os-muted {font-size:var(--fs-meta);line-height:1.7}
+.os-estimate-choices {display:flex;flex-wrap:wrap;gap:8px;margin:16px 0 4px}
+.os-estimate-choices .os-button {min-width:56px;justify-content:center}
+.os-estimate-modal .os-modal-actions {display:flex;justify-content:flex-start;margin-top:10px}
+
+/* 页内分段。导航从十项收到五项之后，原来的六个顶层去处落到这里——
+   去处一个没少，只是不再各占一格侧栏。只有一段的入口不显示这一行。 */
+.os-subhead {display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-top:4px}
+.os-sections {display:flex;gap:4px;flex-wrap:wrap;flex:none}
+.os-sections[hidden] {display:none}
+/* 页头分段的样式和页内筛选合在上面「分段控件」那一处了。 */
+
+/* ---------- 课表 ---------- */
+
+/* 课程色的六组令牌落到三个局部变量上。课块、今日行、色标、右上卡都只读这三个，
+   换组只换一个类，不用给每个部件各写六遍。 */
+.os-root .is-c1 {--c-bg:var(--os-course-1-bg);--c-ink:var(--os-course-1-ink);--c-edge:var(--os-course-1-edge)}
+.os-root .is-c2 {--c-bg:var(--os-course-2-bg);--c-ink:var(--os-course-2-ink);--c-edge:var(--os-course-2-edge)}
+.os-root .is-c3 {--c-bg:var(--os-course-3-bg);--c-ink:var(--os-course-3-ink);--c-edge:var(--os-course-3-edge)}
+.os-root .is-c4 {--c-bg:var(--os-course-4-bg);--c-ink:var(--os-course-4-ink);--c-edge:var(--os-course-4-edge)}
+.os-root .is-c5 {--c-bg:var(--os-course-5-bg);--c-ink:var(--os-course-5-ink);--c-edge:var(--os-course-5-edge)}
+.os-root .is-c6 {--c-bg:var(--os-course-6-bg);--c-ink:var(--os-course-6-ink);--c-edge:var(--os-course-6-edge)}
+
+.os-chip.is-warm {background:var(--os-pill-warm-bg);color:var(--os-pill-warm-ink)}
+.os-chip.is-alert {background:var(--os-pill-alert-bg);color:var(--os-pill-alert-ink);font-weight:600}
+.os-chip-row {display:flex;flex-wrap:wrap;gap:4px}
+.os-chip-row .os-chip {white-space:normal;height:auto;min-height:20px;line-height:1.35;padding:2px 8px}
+
+/* 两栏：一周的网格占满，右边一条窄栏回答「现在去哪」。 */
+.os-schedule {flex:1;min-height:0;display:grid;gap:22px;
+  grid-template-columns:minmax(0,1fr) minmax(260px,300px)}
+.os-schedule-board .os-panel-body {display:flex;flex-direction:column;padding-bottom:18px}
+.os-schedule-side {display:flex;flex-direction:column;gap:20px;min-height:0;overflow:hidden}
+.os-root .os-week-step {min-width:34px;padding:4px 10px;font-size:16px;line-height:1}
+
+/* 网格。列头一行、时间轴一列，其余每天一列。行高跟面板走，每小时最少 40px，
+   再矮就让面板体滚——宁可滚也不把一节两小时的课压成一条缝。 */
+.os-week {flex:1;display:grid;column-gap:8px;
+  grid-template-columns:44px repeat(var(--days),minmax(0,1fr));
+  grid-template-rows:auto minmax(calc(var(--hours) * 40px),1fr)}
+.os-week-corner {grid-row:1;grid-column:1}
+.os-week-head {display:flex;flex-direction:column;align-items:center;gap:2px;padding:0 0 10px}
+.os-week-weekday {font-size:var(--fs-meta);font-weight:600;letter-spacing:1px;color:var(--os-muted)}
+/* 日期走衬线，和计时、时钟、气温同一种字——「一个读数」的那一路。
+   今天那一格是一枚实心的墨绿圆片，其余都是空心：一眼就能找到今天在哪一列。 */
+.os-week-date {display:grid;place-items:center;width:34px;height:34px;border-radius:50%;
+  font-family:var(--os-display);font-size:20px;font-weight:400;font-variant-numeric:tabular-nums;color:var(--os-ink)}
+/* 今天的星期用正文墨色，不用蓝：12px 的蓝字压在玻璃列头上，浅色纯黑壁纸只量到 4.01。
+   今天由下面那枚实心蓝圆片标出，星期只需要比别的列更重一点。 */
+.os-week-head.is-today .os-week-weekday {color:var(--os-ink)}
+.os-week-head.is-today .os-week-date {background:var(--os-accent);color:var(--os-accent-ink);font-weight:600}
+.os-week-axis {position:relative;grid-row:2;grid-column:1}
+/* 刻度走 --os-body 不走 --os-muted：10px 的字，muted 在纯黑壁纸上只量到 4.88，余量不够。 */
+.os-week-hour {position:absolute;right:6px;transform:translateY(-50%);font-size:10px;
+  font-variant-numeric:tabular-nums;color:var(--os-body);line-height:1}
+.os-week-hour:first-child {transform:none}.os-week-hour:last-child {transform:translateY(-100%)}
+/* 整点线画在列的背景上，不是十几个 div。线用 --os-soft：它只是刻度，
+   分区的职责归 --os-line，两者一样深的话整张网格会读成一张表格。 */
+.os-week-col {position:relative;grid-row:2;min-width:0;border-radius:10px;
+  background-image:linear-gradient(to bottom,var(--os-soft) 1px,transparent 1px);
+  background-size:100% calc(100% / var(--hours));background-position:0 0}
+.os-week-col.is-today {background-color:var(--os-glass-recess);box-shadow:inset 0 0 0 1px var(--os-glass-shade)}
+
+/* 课块。实色底加一道左缘色条：块是实色，字压在块上而不是玻璃上，
+   所以不管背后是什么照片，字的对比度都是令牌里量过的那个数。 */
+.os-root .os-class {position:absolute;display:flex;flex-direction:column;align-items:flex-start;gap:1px;
+  min-height:0;margin:0;padding:6px 8px 6px 10px;overflow:hidden;text-align:left;
+  border:0;border-radius:12px;background:var(--c-bg);color:var(--c-ink);
+  box-shadow:inset 3px 0 0 var(--c-edge),var(--os-glass-drop);
+  transition:transform .24s var(--os-ease),box-shadow .24s var(--os-ease)}
+.os-root .os-class:hover {background:var(--c-bg);transform:translateY(-1px);z-index:1}
+.os-root .os-class.is-selected {box-shadow:inset 3px 0 0 var(--c-edge),0 0 0 2px var(--c-edge);z-index:1}
+.os-class-title {font-size:12px;font-weight:650;line-height:1.25;overflow-wrap:anywhere;
+  display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:2;overflow:hidden}
+.os-class-meta {font-size:10.5px;font-weight:500;line-height:1.3;font-variant-numeric:tabular-nums;white-space:nowrap}
+/* 并排的两节，每块只剩一半宽：标题允许三行。 */
+.os-root .os-class.is-narrow {padding:5px 6px 5px 8px}
+.os-class.is-narrow .os-class-title {font-size:11px;-webkit-line-clamp:3}
+/* 重叠的课右上角一个小三角。只是提示「这里有两节」，细节在右边那张卡里说。 */
+.os-class.is-clash::after {content:"";position:absolute;top:0;right:0;border-style:solid;
+  border-width:0 9px 9px 0;border-color:transparent var(--os-pill-alert-ink) transparent transparent;border-top-right-radius:12px}
+
+/* 此刻线。墨绿不是赤陶：赤陶一页只许出现在一处，那一处是「开始专注」。 */
+.os-now-line {position:absolute;left:-3px;right:0;height:2px;margin-top:-1px;z-index:2;pointer-events:none;
+  background:var(--os-accent-2);border-radius:2px}
+.os-now-line::before {content:"";position:absolute;left:-3px;top:-3px;width:8px;height:8px;border-radius:50%;background:var(--os-accent-2)}
+.os-now-line[hidden] {display:none}
+.os-week-empty {margin:12px 0 0 52px;font-size:var(--fs-body);color:var(--os-muted)}
+
+/* 右上卡：「正在上 / 下一节」。时间是这张卡的主角，所以它最大。 */
+.os-class-focus-host {display:flex;flex:none}
+.os-class-focus-host>.os-panel {flex:1}
+.os-class-focus {position:relative}
+.os-class-focus::before {content:"";position:absolute;left:0;top:18px;bottom:18px;width:3px;border-radius:0 3px 3px 0;background:var(--c-edge,transparent)}
+.os-class-focus .os-panel-body {display:flex;flex-direction:column;gap:12px;overflow:visible}
+.os-class-time {display:flex;align-items:baseline;gap:8px}
+.os-class-time strong {font-family:var(--os-display);font-size:48px;font-weight:300;line-height:1;
+  font-variant-numeric:tabular-nums;color:var(--os-ink);letter-spacing:-.5px}
+.os-class-time span {font-size:var(--fs-body);color:var(--os-muted);font-variant-numeric:tabular-nums}
+.os-class-facts {display:grid;grid-template-columns:auto minmax(0,1fr);gap:5px 12px;margin:0;font-size:var(--fs-body);line-height:1.45}
+.os-class-facts dt {color:var(--os-muted);font-size:var(--fs-meta);font-weight:600;letter-spacing:.5px;padding-top:1px}
+.os-class-facts dd {margin:0;color:var(--os-body);overflow-wrap:anywhere}
+.os-class-facts dd:first-of-type {color:var(--os-ink);font-weight:650}
+.os-class-actions {display:flex;gap:6px;flex-wrap:wrap}
+
+/* 本学期课程：色标一格一行。 */
+.os-course-key {flex:1;min-height:0}
+.os-course-key-list {display:flex;flex-direction:column}
+.os-root .os-course-key-row {display:grid;grid-template-columns:10px minmax(0,1fr) auto;align-items:center;gap:10px;
+  width:100%;min-height:36px;padding:6px 4px;border:0;border-bottom:1px solid var(--os-soft);border-radius:0;
+  background:transparent;text-align:left;color:var(--os-body)}
+.os-root .os-course-key-row:hover {background:var(--os-soft)}
+.os-course-swatch {width:10px;height:10px;border-radius:3px;background:var(--c-edge)}
+.os-course-key-row strong {font-size:var(--fs-body);font-weight:600;color:var(--os-ink);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.os-course-key-row span {font-size:var(--fs-meta);color:var(--os-muted);font-variant-numeric:tabular-nums;white-space:nowrap}
+.os-course-key-row.is-hidden strong {color:var(--os-muted);font-weight:500}
+.os-course-key-row.is-hidden .os-course-swatch {background:transparent;box-shadow:inset 0 0 0 1.5px var(--os-muted)}
+.os-course-key-foot {display:flex;flex-direction:column;align-items:flex-start;gap:10px;margin-top:14px}
+
+/* 今日页「今天的课」。一节一行：时间 / 课与教室 / 状态。已经上完的退成次要文字，
+   不用透明度——透明度会把壁纸透上来，字的对比度就又不由令牌定了。 */
+.os-today-classes {flex:none;max-height:46%}
+.os-today-classes .os-panel-head {padding-top:14px;padding-bottom:8px}
+.os-today-classes .os-panel-head h2 {font-size:15px;margin-top:0}
+.os-today-classes .os-panel-body {padding-bottom:12px}
+.os-root .os-class-row {display:grid;grid-template-columns:48px minmax(0,1fr) auto;align-items:center;gap:10px;
+  width:100%;min-height:0;padding:6px 8px 6px 11px;margin:0 0 4px;border:0;border-radius:8px;
+  background:transparent;box-shadow:inset 3px 0 0 var(--c-edge);text-align:left;color:var(--os-body)}
+.os-root .os-class-row:hover {background:var(--os-soft)}
+.os-root .os-class-row.is-now {background:var(--c-bg);color:var(--c-ink)}
+.os-class-row-time {display:flex;flex-direction:column;line-height:1.15;font-variant-numeric:tabular-nums}
+.os-class-row-time strong {font-size:var(--fs-body);font-weight:650;color:inherit}
+.os-class-row-time span {font-size:10.5px}
+.os-class-row-main {display:flex;flex-direction:column;min-width:0;line-height:1.3}
+.os-class-row-main strong {font-size:var(--fs-body);font-weight:600;color:var(--os-ink);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.os-class-row-main span {font-size:var(--fs-meta);color:var(--os-muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.os-root .os-class-row.is-now .os-class-row-main strong,.os-root .os-class-row.is-now .os-class-row-main span {color:var(--c-ink)}
+.os-root .os-class-row.is-done {color:var(--os-muted)}
+.os-root .os-class-row.is-done .os-class-row-main strong {color:var(--os-muted);font-weight:500}
+.os-class-none {font-size:var(--fs-body);color:var(--os-muted);margin:0}
+
+@container (max-width:1150px) {
+  .os-schedule {gap:16px;grid-template-columns:minmax(0,1fr) minmax(230px,260px)}
+  .os-class-time strong {font-size:36px}
+}
+/* 窄下来右栏折到网格下面。本轮只保证桌面宽屏，这里只求不塌。 */
+@container (max-width:800px) {
+  .os-schedule {display:flex;flex-direction:column;overflow-y:auto}
+  .os-schedule-board {flex:none}
+  .os-schedule-side {overflow:visible}
+  .os-week {column-gap:4px;grid-template-columns:36px repeat(var(--days),minmax(0,1fr))}
+  .os-class-meta:last-child {display:none}
+}
+
+/* 总结笔记：沿用现有系统蓝与玻璃令牌。 */
+.os-summary-toolbar {display:flex;flex-wrap:wrap;gap:10px;padding:18px 22px;border-bottom:1px solid var(--os-line);flex:none}
+.os-summary-panel>.os-panel-head[hidden] {display:none}
+.os-summary-toolbar input[type=search] {flex:1 1 180px}
+.os-summary-toolbar select {flex:0 1 190px}
+.os-summary-toolbar input[type=date] {flex:0 1 150px}
+.os-summary-panel>.os-panel-body {display:grid;grid-template-columns:minmax(220px,3fr) minmax(0,7fr);padding:0;overflow:hidden;scrollbar-gutter:auto}
+.os-summary-list,.os-summary-detail {overflow:auto;overscroll-behavior:contain;scrollbar-width:thin;min-height:0}
+.os-summary-list {border-right:1px solid var(--os-line);padding:12px}
+.os-root .os-summary-date {font-size:var(--fs-meta);font-weight:500;color:var(--os-muted);padding:14px 12px 8px;letter-spacing:.5px}
+.os-root .os-summary-row {display:flex;flex-direction:column;align-items:stretch;gap:6px;width:100%;height:auto;text-align:left;white-space:normal;padding:14px 12px;margin:2px 0;border:1px solid transparent;border-radius:8px;background:transparent;box-shadow:none;color:var(--os-body)}
+.os-root .os-summary-row:hover {background:var(--os-fill)}
+.os-root .os-summary-row.is-active {background:var(--os-glass);border-color:var(--os-line);box-shadow:inset 3px 0 var(--os-accent)}
+.os-summary-row strong {font-size:var(--fs-body);font-weight:600;overflow-wrap:anywhere}
+.os-summary-excerpt {display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;color:var(--os-muted);font-size:var(--fs-meta);line-height:1.7;overflow-wrap:anywhere}
+.os-summary-subtitle {font-size:var(--fs-meta);color:var(--os-muted)}
+.os-summary-detail {background:var(--os-glass);padding:28px clamp(20px,3cqw,48px)}
+.os-root .os-summary-heading {padding-bottom:22px;margin-bottom:24px;border-bottom:1px solid var(--os-line)}
+.os-root .os-summary-heading h2 {font-size:clamp(20px,2cqw,28px);line-height:1.5;margin:8px 0 12px;overflow-wrap:anywhere}
+.os-summary-markdown {line-height:1.9;font-size:15px;overflow-wrap:anywhere;user-select:text}
+.os-root .os-summary-markdown p {margin:0 0 1em}
+.os-root .os-summary-markdown :is(h1,h2,h3,h4) {margin:1.4em 0 .6em;line-height:1.5}
+.os-root .os-summary-markdown h1 {font-size:1.6em}
+.os-root .os-summary-markdown h2 {font-size:1.3em}
+.os-summary-markdown img {max-width:100%;height:auto}
+.os-summary-markdown :is(pre,table,.math-block) {max-width:100%;overflow-x:auto}
+.os-summary-markdown.is-raw {white-space:pre-wrap}
+.os-summary-back {display:none!important}
+@container (max-width:650px) {
+  .os-summary-toolbar {gap:6px;padding:10px}
+  .os-summary-toolbar input[type=search] {flex-basis:100%;width:100%}
+  .os-summary-toolbar :is(select,input[type=date]) {flex:1 1 100px;width:100px}
+  .os-summary-panel>.os-panel-body {display:flex}
+  .os-summary-list {width:100%;border:0}
+  .os-summary-detail {display:none;width:100%;padding:18px}
+  .os-summary-body.has-selection .os-summary-list {display:none}
+  .os-summary-body.has-selection .os-summary-detail {display:block}
+  .os-root .os-summary-back {display:inline-flex!important;margin-bottom:12px}
+}
+
+/* ---------- 7.4 页头齿轮 ---------- */
+/* 挂件设置的入口。只画图标，圆形，和旁边的胶囊按钮同高；窄屏收起 .os-quiet 的规则不收它——
+   左栏那个入口已经拿掉，这是除命令面板之外唯一的入口。 */
+.os-root .os-header-actions .os-header-gear {display:inline-flex;align-items:center;justify-content:center;
+  width:34px;min-width:34px;padding:0;color:var(--os-body)}
+.os-root .os-header-actions .os-header-gear[hidden] {display:none}
+.os-root .os-header-gear .os-icon {display:inline-flex;color:inherit}
+.os-root .os-header-gear svg {width:17px;height:17px}
+.os-root .os-header-gear:hover {color:var(--os-accent-2)}
+
+/* ---------- 7.4 自编教材 ---------- */
+.os-own-series+.os-own-series {margin-top:18px}
+.os-own-series-head {display:flex;align-items:baseline;justify-content:space-between;gap:12px;flex-wrap:wrap;
+  padding:6px 0 4px;border-bottom:.5px solid var(--os-line)}
+.os-own-series-head h3 {font-size:var(--fs-title);font-weight:600;color:var(--os-ink)}
+.os-own-series-head span {font-size:var(--fs-meta)}
+.os-own-book {display:flex;align-items:flex-start;gap:12px;padding:10px 0;border-bottom:.5px solid var(--os-glass-shade)}
+.os-own-book:last-child {border-bottom:0}
+.os-own-book-title {display:block;font-weight:550;font-size:var(--fs-body);color:var(--os-ink)}
+.os-own-book-date {margin-left:4px}
+.os-own-book-next {margin-top:4px;font-size:var(--fs-body);color:var(--os-body);line-height:1.5}
+.os-own-book-warn {margin-top:4px;font-size:var(--fs-meta);color:var(--os-pill-alert-ink)}
+.os-own-book .os-read-track {max-width:320px}
+.os-own-book-actions {display:flex;gap:4px;flex:none;flex-wrap:wrap;justify-content:flex-end}
+@container (max-width:650px) {
+  .os-own-book {flex-wrap:wrap;gap:6px}.os-own-book>.os-row-main {flex-basis:100%}
+  .os-own-book-actions {justify-content:flex-start}
+}
+.os-own-series-next,.os-own-series-note {margin:6px 0 2px;font-size:var(--fs-meta)}
+/* 多了齿轮之后，900px 上下页头那一排放不下天气 + 两个按钮 + 齿轮，换行会把「新任务」挤到第二行、
+   压在天气底下。页头挂件在的宽度里不换行，让天气先收窄（它自己 min-width:0、元信息带省略号）。 */
+@container (min-width:801px) { .os-root .os-header-actions {flex-wrap:nowrap} .os-root .os-header-actions>.os-button {flex:none} }

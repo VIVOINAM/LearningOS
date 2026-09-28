@@ -94,6 +94,11 @@ const RULES = [
     { a: `--os-course-${n}-ink`, b: `--os-course-${n}-bg`, min: 7, kind: "text", why: `课表第 ${n} 组课程色：课块上的字` },
     { a: `--os-course-${n}-edge`, b: "--os-paper", min: 3, kind: "border", why: `课表第 ${n} 组课程色：左缘色条要从卡面上认得出` },
   ]),
+  // 知识地图节点：实底上的字，同课块一样按 7 留余量；描边是节点在卡面上的轮廓，按图形 3.0。
+  ...["unknown", "review", "understood", "applied", "planned"].flatMap((level) => [
+    { a: `--os-mastery-${level}-ink`, b: `--os-mastery-${level}-bg`, min: 7, kind: "text", why: `知识地图「${level}」节点上的字` },
+    { a: `--os-mastery-${level}-edge`, b: "--os-paper", min: 3, kind: "border", why: `知识地图「${level}」节点的轮廓` },
+  ]),
 ];
 
 /** 返回 [{theme, a, b, min, actual, ok, why}]，调用方决定怎么报。 */

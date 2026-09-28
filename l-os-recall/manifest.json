@@ -1,0 +1,8 @@
+{
+  "id": "l-os-recall",
+  "name": "L-OS 间隔复习",
+  "minAppVersion": "1.5.0",
+  "description": "独立的本地笔记复习队列、评分调度与复习历史，无第三方插件依赖。",
+  "author": "L-OS",
+  "isDesktopOnly": false
+}

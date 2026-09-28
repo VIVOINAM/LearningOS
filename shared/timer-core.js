@@ -1,7 +1,7 @@
 "use strict";
 
 /**
- * CODEX 3.0 · 专注计时纯状态机
+ * L-OS 3.0 · 专注计时纯状态机
  *
  * 这个文件不依赖 Obsidian，可以用 node --test 直接测。
  * 状态字段保持 v1.7 兼容，并为新记录补充 startedAt：phase / status / duration / remaining / endAt / task / id / startedAt

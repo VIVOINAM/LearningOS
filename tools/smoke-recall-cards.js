@@ -1,10 +1,10 @@
 "use strict";
 
 /**
- * 闭环 A 的端到端检查：codex-study 的一张卡片进 codex-recall 的队列，
+ * 闭环 A 的端到端检查：l-os-study 的一张卡片进 l-os-recall 的队列，
  * 复习、评分、改名、移出，旧的整篇笔记条目全程不受影响。
  *
- * 6.2 之前这条路根本不存在——在整个 codex-study 里 grep "recall" 返回零结果。
+ * 6.2 之前这条路根本不存在——在整个 l-os-study 里 grep "recall" 返回零结果。
  */
 
 const assert = require("node:assert/strict");
@@ -37,8 +37,8 @@ const app = {
   plugins: { plugins: {}, getPlugin(id) { return this.plugins[id] || null; } },
 };
 
-const Recall = require("../codex-recall/main.js");
-const { splitKey, makeKey } = require("../codex-recall/core/keys.js");
+const Recall = require("../l-os-recall/main.js");
+const { splitKey, makeKey } = require("../l-os-recall/core/keys.js");
 
 const NOTE = "03 知识库/学习笔记/极限.md";
 const BOOK = "book/数学分析 II.pdf";
@@ -48,15 +48,15 @@ files.set(NOTE, { path: NOTE, extension: "md", content: "# 极限\n定义与例�
 files.set(BOOK, { path: BOOK, extension: "pdf" });
 
 // 旧数据：只有笔记键，没有卡片键。迁移必须是空操作。
-stored.set("codex-recall", {
+stored.set("l-os-recall", {
   schemaVersion: 1,
   cards: { [NOTE]: { due: Date.now() - 1000, interval: 3, addedAt: 1 } },
   history: [],
 });
 
 (async () => {
-  const recall = new Recall(app, { id: "codex-recall" });
-  app.plugins.plugins["codex-recall"] = recall;
+  const recall = new Recall(app, { id: "l-os-recall" });
+  app.plugins.plugins["l-os-recall"] = recall;
   await recall.onload();
 
   // 1. 旧的笔记条目原样还在，key 就是路径。

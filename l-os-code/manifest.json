@@ -1,0 +1,8 @@
+{
+  "id": "l-os-code",
+  "name": "L-OS 代码查看",
+  "minAppVersion": "1.5.0",
+  "description": "在库里直接读课程文件夹里的 MATLAB .m 脚本：只读，等宽，行号，MATLAB 着色，长行在缩进处折行。",
+  "author": "L-OS",
+  "isDesktopOnly": false
+}

@@ -3,7 +3,7 @@ chcp 65001 >nul
 setlocal
 cd /d "%~dp0"
 set "LOG=%~dp0deploy.log"
-echo CODEX deploy log > "%LOG%"
+echo L-OS deploy log > "%LOG%"
 echo [%date% %time%] start >> "%LOG%"
 where node >> "%LOG%" 2>&1
 if errorlevel 1 (

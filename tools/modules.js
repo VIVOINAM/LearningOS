@@ -14,13 +14,14 @@
 // 6.0 之前的「版本迭代」小节还在日志里，删掉映射会让 check 把它当写错的模块名。
 // 「现在有哪些插件」看 tools/plugins.js，不看这里。
 const LABELS = {
-  "codex-workbench": "工作台",
-  "codex-capture": "捕获",
-  "codex-focus": "专注",
-  "codex-study": "学习",
-  "codex-recall": "复习",
-  "codex-widgets": "挂件",
-  "codex-iteration": "版本迭代",
+  "l-os-workbench": "工作台",
+  "l-os-capture": "捕获",
+  "l-os-focus": "专注",
+  "l-os-study": "学习",
+  "l-os-recall": "复习",
+  "l-os-widgets": "挂件",
+  "l-os-code": "代码",
+  "l-os-iteration": "版本迭代",
 };
 
 const ORDER = Object.keys(LABELS);

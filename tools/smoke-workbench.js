@@ -1,6 +1,6 @@
 "use strict";
 
-/** CODEX 3.0 workbench onload smoke test with a minimal DOM mock. */
+/** L-OS 3.0 workbench onload smoke test with a minimal DOM mock. */
 
 const fs = require("node:fs");
 const path = require("node:path");
@@ -82,13 +82,13 @@ class MockVault {
   constructor(legacy) {
     this.legacy = legacy;
     this.files = new Map();
-    // 同 smoke-lifecycle：codex-study 的元数据走 vault.adapter，stub 需要 exists 与真正的写入。
+    // 同 smoke-lifecycle：l-os-study 的元数据走 vault.adapter，stub 需要 exists 与真正的写入。
     this.written = new Map();
     this.adapter = {
       exists: async (p) => this.written.has(p) || this.files.has(p),
       read: async (p) => {
         if (this.written.has(p)) return this.written.get(p);
-        if (p === ".obsidian/plugins/codex-workbench/data.json" && this.legacy) return JSON.stringify(this.legacy);
+        if (p === ".obsidian/plugins/l-os-workbench/data.json" && this.legacy) return JSON.stringify(this.legacy);
         const error = new Error(`ENOENT: ${p}`);
         error.code = "ENOENT";
         throw error;
@@ -171,34 +171,34 @@ async function main() {
   app.vault.files.set("03 知识库/note.md", new MockFile("03 知识库/note.md", "# 笔记\n"));
   app.vault.files.set("02 项目/proj.md", new MockFile("02 项目/proj.md", "---\ntype: project\nstatus: 进行中\nnext: 写下一章\ndue: 2026-09-20\n---\n# 项目\n"));
 
-  const Focus = load("codex-focus");
-  const focus = new Focus(app, { id: "codex-focus", version: "3.0.0" });
-  app.plugins.plugins["codex-focus"] = focus;
+  const Focus = load("l-os-focus");
+  const focus = new Focus(app, { id: "l-os-focus", version: "3.0.0" });
+  app.plugins.plugins["l-os-focus"] = focus;
   await focus.onload();
 
-  const Study = load("codex-study");
-  const study = new Study(app, { id: "codex-study", version: "3.0.0" });
-  app.plugins.plugins["codex-study"] = study;
+  const Study = load("l-os-study");
+  const study = new Study(app, { id: "l-os-study", version: "3.0.0" });
+  app.plugins.plugins["l-os-study"] = study;
   await study.onload();
 
-  const Capture = load("codex-capture");
-  const capture = new Capture(app, { id: "codex-capture", version: "3.0.0" });
-  app.plugins.plugins["codex-capture"] = capture;
+  const Capture = load("l-os-capture");
+  const capture = new Capture(app, { id: "l-os-capture", version: "3.0.0" });
+  app.plugins.plugins["l-os-capture"] = capture;
   await capture.onload();
 
-  const Workbench = load("codex-workbench");
-  const workbench = new Workbench(app, { id: "codex-workbench", version: "4.1.1" });
+  const Workbench = load("l-os-workbench");
+  const workbench = new Workbench(app, { id: "l-os-workbench", version: "4.1.1" });
   workbench.__data = { ...legacy, lastTextbook: "book/a.pdf" };
-  app.plugins.plugins["codex-workbench"] = workbench;
+  app.plugins.plugins["l-os-workbench"] = workbench;
   await workbench.onload();
   await new Promise((resolve) => setTimeout(resolve, 20));
 
-  assert.equal(workbench.focus, focus, "workbench should bind codex-focus");
-  assert.equal(workbench.study, study.engine, "workbench should bind codex-study engine");
+  assert.equal(workbench.focus, focus, "workbench should bind l-os-focus");
+  assert.equal(workbench.study, study.engine, "workbench should bind l-os-study engine");
   assert.equal(workbench.data.timer.task, "", "timer proxy should read focus state");
   assert.equal(workbench.data.focusMinutes, 50, "focus settings should migrate from legacy workbench data");
   assert.equal(workbench.refreshWeather, undefined, "V4 removes weather networking");
-  const factory = workbench.__views && workbench.__views["codex-workbench"];
+  const factory = workbench.__views && workbench.__views["l-os-workbench"];
   assert.ok(factory, "workbench should register console view factory");
   const leaf = { view: null };
   const view = factory(leaf);
@@ -237,6 +237,21 @@ async function main() {
   assert.equal(workbench.preferredBookFor(course), "book/b.pdf", "应当优先上次在读的那一份");
   workbench.data.lastTextbook = "book/不在这门课.pdf";
   assert.equal(workbench.preferredBookFor(course), "book/a.pdf", "上次在读的不属于这门课时退回第一份");
+
+  // 关联文件夹里的 .m 进课程主页的「关联代码」：按子目录分组、目录名只写一次；E00 排在「附加练习」前面（和资料索引一致），
+  // 同一目录里按数字排序；直接放在课程文件夹里的脚本不缩进；文件夹外的不算；没有 .m 的课不出这一节。
+  const folder = "课程文件/测试课";
+  const X = "02 习题课/附加练习 Esercizi", E = "02 习题课/E00 Intro";
+  for (const p of [`${folder}/${X}/ex10_b.m`, `${folder}/${X}/ex2_a.m`, `${folder}/${E}/E00_00_x.m`, `${folder}/main.m`, `${folder}/${X}/讲义.pdf`, "别处/x.m"])
+    app.vault.files.set(p, new MockFile(p, ""));
+  workbench.data.courses[course.id].folders = [folder];
+  assert.deepEqual(workbench.courseCodeFor(course).map(r => r.label), ["main.m", `${E}/E00_00_x.m`, `${X}/ex2_a.m`, `${X}/ex10_b.m`]);
+  const coursePage = await workbench.syncCourse(course);
+  const expected = ["### 关联代码", `- [[${folder}/main.m|main.m]]`, "- E00 Intro", `\t- [[${folder}/${E}/E00_00_x.m|E00_00_x.m]]`,
+    "- 附加练习 Esercizi", `\t- [[${folder}/${X}/ex2_a.m|ex2_a.m]]`, `\t- [[${folder}/${X}/ex10_b.m|ex10_b.m]]`, "<!-- /cw-course -->"].join("\n");
+  assert.ok(coursePage.content.includes(expected), coursePage.content);
+  workbench.data.courses[course.id].folders = [];
+  assert.ok(!(await workbench.syncCourse(course)).content.includes("### 关联代码"), "没有 .m 的课不该多出一节");
 
   console.log("workbench onload smoke：通过");
 }

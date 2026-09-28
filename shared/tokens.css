@@ -48,7 +48,7 @@
      2. 外圈一道压暗的边         —— --os-glass-rim
      3. 更亮的镜面高光           —— --os-glass-lit（上缘一道）与 --os-glass-sheen（左上一片）
      这些是 rgba，contrast.js 量不到；它们压着字的效果由 legibility.cjs 在真实界面上量。 */
-  /* 浓度跟「玻璃浓度」滑块走：--os-glass-tint 是 0–1，由 codex-widgets 写到根节点，
+  /* 浓度跟「玻璃浓度」滑块走：--os-glass-tint 是 0–1，由 l-os-widgets 写到根节点，
      没写时取 .5，正好是 0.74 / 0.70。
      只放淡底色是不够的：第一版到 0.56 为止、钳位不动，闸门在「浅色 + 纯黑壁纸」上把
      次要文字量到 3.75。所以底色变淡时下面的钳位跟着抬亮（见 --os-glass-clamp），
@@ -158,10 +158,19 @@
   --os-course-4-bg: #FAEFCF; --os-course-4-ink: #5B4103; --os-course-4-edge: #A67800;
   --os-course-5-bg: #EEE3F9; --os-course-5-ink: #3E1F66; --os-course-5-edge: #8A4FD6;
   --os-course-6-bg: #D9F0F1; --os-course-6-ink: #0B4448; --os-course-6-edge: #12878C;
+
+  /* ---- 掌握度 ----
+     知识地图的节点：实底，压在玻璃和壁纸上照样认得出字。四档之外还有「未学」。
+     颜色只是一半，形状（空心 / 叹号 / 半实心 / 实心 / 虚线框）是另一半，色弱也分得开。 */
+  --os-mastery-unknown-bg: #FFFFFF; --os-mastery-unknown-ink: #1C1C1E; --os-mastery-unknown-edge: #76767D;
+  --os-mastery-review-bg: #FFF1D6; --os-mastery-review-ink: #5C3800; --os-mastery-review-edge: #B26A00;
+  --os-mastery-understood-bg: #DCF2E3; --os-mastery-understood-ink: #0B4A2B; --os-mastery-understood-edge: #2E9A5C;
+  --os-mastery-applied-bg: #0F5A31; --os-mastery-applied-ink: #FFFFFF; --os-mastery-applied-edge: #0F5A31;
+  --os-mastery-planned-bg: #F2F2F7; --os-mastery-planned-ink: #3A3A3C; --os-mastery-planned-edge: #8E8E93;
 }
 
 /* 钳位只在背后真有照片时生效。没有照片时那个「任意背景」就是 --os-bg，
- * 钳位只会把它拖成一块灰。开关归 codex-widgets（它挂 body.os-wallpaper-on）。 */
+ * 钳位只会把它拖成一块灰。开关归 l-os-widgets（它挂 body.os-wallpaper-on）。 */
 body.os-wallpaper-on {
   --os-glass-blur: var(--os-glass-clamp);
   --os-focus-blur: var(--os-focus-clamp);
@@ -227,6 +236,12 @@ body.theme-dark {
   --os-course-4-bg: #3E3214; --os-course-4-ink: #FBE7AE; --os-course-4-edge: #F4BE2F;
   --os-course-5-bg: #33214D; --os-course-5-ink: #E6D6FF; --os-course-5-edge: #B38BFF;
   --os-course-6-bg: #113B3D; --os-course-6-ink: #C4F0F0; --os-course-6-edge: #3CC7C9;
+
+  --os-mastery-unknown-bg: #2C2C31; --os-mastery-unknown-ink: #F5F5F7; --os-mastery-unknown-edge: #8E8E96;
+  --os-mastery-review-bg: #3A2A10; --os-mastery-review-ink: #F7C86E; --os-mastery-review-edge: #C98A1E;
+  --os-mastery-understood-bg: #173A28; --os-mastery-understood-ink: #C9F2D9; --os-mastery-understood-edge: #4CC38A;
+  --os-mastery-applied-bg: #5FD39A; --os-mastery-applied-ink: #0B1F14; --os-mastery-applied-edge: #5FD39A;
+  --os-mastery-planned-bg: #1A1A1E; --os-mastery-planned-ink: #C4C4CC; --os-mastery-planned-edge: #6C6C74;
 }
 
 /* 系统设了「减少透明度」：玻璃换成实色面，iOS 27 也这么做。 */

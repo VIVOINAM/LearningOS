@@ -9,7 +9,7 @@ const SOURCE_ROOT = path.join(ROOT, "dist", "plugins");
 const TARGET_ROOT = path.join(VAULT, ".obsidian", "plugins");
 const COMMUNITY = path.join(VAULT, ".obsidian", "community-plugins.json");
 const PLUGINS = require("./plugins");
-const OBSOLETE = ["codex-focus-timer", "codex-capture-v3", "codex-iteration-v3", "codex-workbench-v3", "codex-iteration"];
+const RETIRED = require("./retired");
 // 与 tools/sync-docs.js 共用一份清单。此前两边各写一遍，deploy 会漏掉新版本说明。
 const { DOC_COPIES } = require("./sync-docs");
 const { render } = require("./version-log.js");
@@ -36,6 +36,9 @@ if (!fs.existsSync(SOURCE_ROOT)) {
   }
 
   if (!process.exitCode) {
+    RETIRED.migrateData(TARGET_ROOT, PLUGINS);
+    const stale = RETIRED.leftovers(TARGET_ROOT);
+    if (stale.length) console.warn(`[提示] 仍在 plugins 目录中的旧插件：${stale.join(", ")}（数据已迁到 l-os-*；确认 Obsidian 退出后再删除）`);
     let list = [];
     try {
       const parsed = JSON.parse(fs.readFileSync(COMMUNITY, "utf8"));
@@ -43,11 +46,11 @@ if (!fs.existsSync(SOURCE_ROOT)) {
     } catch (error) {
       console.warn(`[警告] community-plugins.json 读取失败：${error.message}`);
     }
-    list = list.filter((id) => !OBSOLETE.includes(id));
+    list = list.filter((id) => !RETIRED.isRetired(id));
     for (const id of [...PLUGINS].reverse()) if (!list.includes(id)) list.unshift(id);
     fs.writeFileSync(COMMUNITY, `${JSON.stringify(list, null, 2)}\n`, "utf8");
     console.log("[启用] community-plugins.json 已更新。");
-    for (const [sourceRelative, targetRelative] of (PLUGINS.includes('codex-workbench') ? DOC_COPIES : [])) {
+    for (const [sourceRelative, targetRelative] of (PLUGINS.includes('l-os-workbench') ? DOC_COPIES : [])) {
       const source = path.join(ROOT, sourceRelative);
       const target = path.join(VAULT, targetRelative);
       if (!fs.existsSync(source)) continue;
@@ -60,7 +63,7 @@ if (!fs.existsSync(SOURCE_ROOT)) {
       }
     }
     // 版本迭代.md 是产物，整篇重写。此前它由工作台在加载时追加，
-    // 漏记与重复都只能靠 codex-iteration 的去重逻辑事后补救。
+    // 漏记与重复都只能靠 l-os-iteration 的去重逻辑事后补救。
     try {
       fs.mkdirSync(path.dirname(VERSION_LOG), { recursive: true });
       fs.writeFileSync(VERSION_LOG, render(fs.readFileSync(path.join(ROOT, "CHANGELOG.md"), "utf8")), "utf8");

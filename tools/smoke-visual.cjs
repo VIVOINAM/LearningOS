@@ -6,26 +6,28 @@ const root=path.resolve(__dirname,'..'),out=path.resolve(process.env.VISUAL_OUTP
  const browser=await chromium.launch({headless:true,channel:'msedge'});const page=await browser.newPage();const errors=[];
  page.on('pageerror',e=>errors.push(e.message));
  await page.setViewportSize({width:1440,height:900});
- await page.setContent('<style>*{box-sizing:border-box}html,body{height:100%;margin:0}body{--font-interface:"Segoe UI","Microsoft YaHei",sans-serif}button,input{font:inherit}</style><div class="workspace-leaf-content" data-type="codex-workbench" style="height:100%"><div class="view-content" style="height:100%"></div></div>');
+ await page.setContent('<style>*{box-sizing:border-box}html,body{height:100%;margin:0}body{--font-interface:"Segoe UI","Microsoft YaHei",sans-serif}button,input{font:inherit}</style><div class="workspace-leaf-content" data-type="l-os-workbench" style="height:100%"><div class="view-content" style="height:100%"></div></div>');
  // 令牌在 shared/tokens.css，由 tools/build.js 内联进产物样式。夹具读的是源码样式，
  // 必须自己按同样顺序补上，否则渲染出来的是一套没有任何 --os-* 的界面——
  // 字号、留白、描边全落到浏览器默认值，断言等于在测另一个东西。
  await page.addStyleTag({content:fs.readFileSync(path.join(root,'shared/tokens.css'),'utf8')});
  await page.addStyleTag({content:fs.readFileSync(path.join(root,'shared/components.css'),'utf8')});
- await page.addStyleTag({content:fs.readFileSync(path.join(root,'codex-workbench/styles.css'),'utf8')});
+ await page.addStyleTag({content:fs.readFileSync(path.join(root,'l-os-workbench/styles.css'),'utf8')});
  // 5.4：el / btn 已合并到 shared/dom.js，各模块的 require 桩都要能解析它。
  await page.addScriptTag({content:`window.domModule=(()=>{const module={exports:{}};${fs.readFileSync(path.join(root,'shared/dom.js'),'utf8')};return module.exports;})();`});
- await page.addScriptTag({content:`window.dateModule=(()=>{const module={exports:{}};${fs.readFileSync(path.join(root,'shared/date.js'),'utf8')};return module.exports;})();window.previewModel=(()=>{const module={exports:{}};const require=name=>{if(name==='../shared/date')return window.dateModule;throw Error('Unexpected fixture dependency: '+name);};${fs.readFileSync(path.join(root,'codex-workbench/console-model.js'),'utf8')};return module.exports;})();`});
+ await page.addScriptTag({content:`window.dateModule=(()=>{const module={exports:{}};${fs.readFileSync(path.join(root,'shared/date.js'),'utf8')};return module.exports;})();window.previewModel=(()=>{const module={exports:{}};const require=name=>{if(name==='../shared/date')return window.dateModule;throw Error('Unexpected fixture dependency: '+name);};${fs.readFileSync(path.join(root,'l-os-workbench/console-model.js'),'utf8')};return module.exports;})();`});
  // 课表模型是纯函数，没有依赖。喂它仓库里那篇真的课表笔记，而不是手写一份：
  // 笔记改了格式、解析跟不上，这里第一个知道。
- await page.addScriptTag({content:`window.timetableModel=(()=>{const module={exports:{}};${fs.readFileSync(path.join(root,'codex-workbench/timetable-model.js'),'utf8')};return module.exports;})();`});
+ await page.addScriptTag({content:`window.timetableModel=(()=>{const module={exports:{}};${fs.readFileSync(path.join(root,'l-os-workbench/timetable-model.js'),'utf8')};return module.exports;})();`});
  await page.evaluate(text=>{window.timetableData={path:'00 工作台/Polimi 2026-27 第一学期课表.md',...timetableModel.parseTimetable(text)};},fs.readFileSync(path.join(root,'../00 工作台/Polimi 2026-27 第一学期课表.md'),'utf8'));
- await page.addScriptTag({content:`window.formulaModel=(()=>{const module={exports:{}};${fs.readFileSync(path.join(root,'codex-study/core/formula-model.js'),'utf8')};return module.exports;})();window.markdownModule={renderMarkdown(_app,_owner,target,markdown){target.textContent=markdown;target.classList.add('markdown-rendered');},markdownOwner(){return{load(){},unload(){}};}};`});
- await page.addScriptTag({content:`window.dueModule=(()=>{const module={exports:{}};const require=()=>({});${fs.readFileSync(path.join(root,'codex-workbench/due.js'),'utf8')};return module.exports;})();`});
- for(const [name,file]of [['budgetModule','budget.js'],['editorModule','action-editor.js']])await page.addScriptTag({content:`window.${name}=(()=>{const module={exports:{}};const require=n=>n.includes('shared/dom')?window.domModule:{};${fs.readFileSync(path.join(root,'codex-workbench',file),'utf8')};return module.exports;})();`});
- await page.addStyleTag({content:fs.readFileSync(path.join(root,'codex-capture/styles.css'),'utf8')});
- await page.addStyleTag({content:fs.readFileSync(path.join(root,'codex-widgets/styles.css'),'utf8')});
- await page.addScriptTag({content:`window.widgetCore=(()=>{const module={exports:{}};const require=n=>window.dateModule;${fs.readFileSync(path.join(root,'codex-widgets/core/widgets.js'),'utf8')};return module.exports;})();`});
+ // 课堂回顾的账本也用真模型，喂同一篇课表。
+ await page.addScriptTag({content:`window.classLedgerModel=(()=>{const module={exports:{}};const require=()=>window.timetableModel;${fs.readFileSync(path.join(root,'l-os-workbench/class-ledger.js'),'utf8')};return module.exports;})();`});
+ await page.addScriptTag({content:`window.formulaModel=(()=>{const module={exports:{}};${fs.readFileSync(path.join(root,'l-os-study/core/formula-model.js'),'utf8')};return module.exports;})();window.markdownModule={renderMarkdown(_app,_owner,target,markdown){target.textContent=markdown;target.classList.add('markdown-rendered');},markdownOwner(){return{load(){},unload(){}};}};`});
+ await page.addScriptTag({content:`window.dueModule=(()=>{const module={exports:{}};const require=()=>({});${fs.readFileSync(path.join(root,'l-os-workbench/due.js'),'utf8')};return module.exports;})();`});
+ for(const [name,file]of [['budgetModule','budget.js'],['editorModule','action-editor.js']])await page.addScriptTag({content:`window.${name}=(()=>{const module={exports:{}};const require=n=>n.includes('shared/dom')?window.domModule:{};${fs.readFileSync(path.join(root,'l-os-workbench',file),'utf8')};return module.exports;})();`});
+ await page.addStyleTag({content:fs.readFileSync(path.join(root,'l-os-capture/styles.css'),'utf8')});
+ await page.addStyleTag({content:fs.readFileSync(path.join(root,'l-os-widgets/styles.css'),'utf8')});
+ await page.addScriptTag({content:`window.widgetCore=(()=>{const module={exports:{}};const require=n=>window.dateModule;${fs.readFileSync(path.join(root,'l-os-widgets/core/widgets.js'),'utf8')};return module.exports;})();`});
  // 桩要还原 Obsidian 真实的 .modal > .modal-content > contentEl 结构，
  // 否则 styles.css 里 .modal:has(...) 的限高规则一条都不会命中，弹窗布局断言就等于在测桩。
  await page.addScriptTag({content:`window.FixtureModal=class {
@@ -41,17 +43,25 @@ const root=path.resolve(__dirname,'..'),out=path.resolve(process.env.VISUAL_OUTP
    open(){document.body.append(this.containerEl);this.onOpen?.();}
    close(){this.containerEl.remove();this.onClose?.();}
  };`});
- await page.addScriptTag({content:`window.TaskModal=(()=>{const module={exports:{}};const require=n=>n==='obsidian'?{Modal:window.FixtureModal,Notice:class{}}:n.includes('shared/dom')?window.domModule:{day:()=>previewModel.dayKey()};${fs.readFileSync(path.join(root,'codex-capture/task-modal.js'),'utf8')};return module.exports.TaskModal;})();`});
- await page.addScriptTag({content:`window.detailModalModule=(()=>{const module={exports:{}};const require=n=>n==='obsidian'?{Modal:window.FixtureModal,Notice:class{constructor(t){window.lastNotice=t}}}:n.includes('shared/dom')?window.domModule:window.editorModule;${fs.readFileSync(path.join(root,'codex-workbench/detail-modal.js'),'utf8')};return module.exports;})();`});
+ await page.addScriptTag({content:`window.TaskModal=(()=>{const module={exports:{}};const require=n=>n==='obsidian'?{Modal:window.FixtureModal,Notice:class{}}:n.includes('shared/dom')?window.domModule:{day:()=>previewModel.dayKey()};${fs.readFileSync(path.join(root,'l-os-capture/task-modal.js'),'utf8')};return module.exports.TaskModal;})();`});
+ await page.addScriptTag({content:`window.detailModalModule=(()=>{const module={exports:{}};const require=n=>n==='obsidian'?{Modal:window.FixtureModal,Notice:class{constructor(t){window.lastNotice=t}}}:n.includes('shared/dom')?window.domModule:window.editorModule;${fs.readFileSync(path.join(root,'l-os-workbench/detail-modal.js'),'utf8')};return module.exports;})();`});
  // FixtureModal 必须先就位：WidgetSettings extends Modal，Modal 是 undefined 时
- // 整个 IIFE 抛在 addScriptTag 里，而 addScriptTag 不会因此失败——window.CodexWidgets
+ // 整个 IIFE 抛在 addScriptTag 里，而 addScriptTag 不会因此失败——window.LOSWidgets
  // 只是静悄悄地不存在。
  // 挂件走的是真正的 main.js，只把 Plugin 外壳和 requestUrl 换成桩：左栏要验的是
  // 「挂件把那段空白填上之后，底部按钮还在不在视口里」，验一份抄写版等于没验。
- await page.addScriptTag({content:`window.CodexWidgets=(()=>{const module={exports:{}};const require=n=>n==='obsidian'?{Plugin:class{async loadData(){return window.widgetData||null}async saveData(d){window.widgetData=d}addCommand(){}registerInterval(){}registerDomEvent(t,e,fn){t.addEventListener(e,fn)}},Modal:window.FixtureModal,Notice:class{constructor(t){window.lastNotice=t}},requestUrl:async()=>({json:{current:{temperature_2m:17.4,weather_code:2}}}),setIcon(e,name){const svg=document.createElementNS("http://www.w3.org/2000/svg","svg");svg.setAttribute("data-icon",name);e.append(svg);}}:n.includes('shared/dom')?window.domModule:n.includes('shared/date')?window.dateModule:window.widgetCore;${fs.readFileSync(path.join(root,'codex-widgets/main.js'),'utf8')};return module.exports;})();`});
- for(const [name,file] of [['summaryModel','summary-notes.js'],['summaryView','summary-view.js']])await page.addScriptTag({content:`window.${name}=(()=>{const module={exports:{}};const require=n=>n.includes('shared/dom')?window.domModule:n.includes('summary-notes')?window.summaryModel:n.includes('markdown-render')?window.markdownModule:{Notice:class{}};${fs.readFileSync(path.join(root,'codex-workbench',file),'utf8')};return module.exports;})();`});
- await page.addScriptTag({content:`window.ConsoleView=(()=>{const module={exports:{}};const require=name=>name.includes('timetable-model')?window.timetableModel:name.includes('shared/dom')?window.domModule:name.includes('summary-view')?window.summaryView:name.includes('console-model')?window.previewModel:name.includes('formula-model')?window.formulaModel:name.includes('markdown-render')?window.markdownModule:name.includes('due')?window.dueModule:name.includes('detail-modal')?window.detailModalModule:name.includes('action-editor')?window.editorModule:name.includes('budget')?window.budgetModule:{ItemView:class{constructor(){this.contentEl=document.querySelector('.view-content')}registerEvent(){}},Notice:class{constructor(t){window.lastNotice=t}},Modal:window.FixtureModal,setIcon(e,name){e.textContent=({sun:'☀','check-square':'✓','book-open':'▤',flame:'♨',files:'▱','rotate-ccw':'↶'})[name]||'○'}};${fs.readFileSync(path.join(root,'codex-workbench/console-view.js'),'utf8')};return module.exports.ConsoleView;})();`});
- const courses=JSON.parse(fs.readFileSync(path.join(root,'codex-workbench/main.js'),'utf8').match(/const COURSES = (\[.*\]);/)[1]);
+ await page.addScriptTag({content:`window.LOSWidgets=(()=>{const module={exports:{}};const require=n=>n==='obsidian'?{Plugin:class{async loadData(){return window.widgetData||null}async saveData(d){window.widgetData=d}addCommand(){}registerInterval(){}registerDomEvent(t,e,fn){t.addEventListener(e,fn)}},Modal:window.FixtureModal,Notice:class{constructor(t){window.lastNotice=t}},requestUrl:async()=>({json:{current:{temperature_2m:17.4,weather_code:2}}}),setIcon(e,name){const svg=document.createElementNS("http://www.w3.org/2000/svg","svg");svg.setAttribute("data-icon",name);e.append(svg);}}:n.includes('shared/dom')?window.domModule:n.includes('shared/date')?window.dateModule:window.widgetCore;${fs.readFileSync(path.join(root,'l-os-widgets/main.js'),'utf8')};return module.exports;})();`});
+ for(const [name,file] of [['summaryModel','summary-notes.js'],['summaryView','summary-view.js']])await page.addScriptTag({content:`window.${name}=(()=>{const module={exports:{}};const require=n=>n.includes('shared/dom')?window.domModule:n.includes('summary-notes')?window.summaryModel:n.includes('markdown-render')?window.markdownModule:{Notice:class{}};${fs.readFileSync(path.join(root,'l-os-workbench',file),'utf8')};return module.exports;})();`});
+ for(const [name,file] of [['studyCardModel','l-os-study/core/study-model.js'],['recallKeys','l-os-recall/core/keys.js'],['knowledgeModel','l-os-workbench/knowledge-model.js'],['knowledgeView','l-os-workbench/knowledge-view.js']])await page.addScriptTag({content:`window.${name}=(()=>{const module={exports:{}};const require=n=>n.includes('shared/dom')?window.domModule:n.includes('summary-notes')?window.summaryModel:n.includes('study-model')?window.studyCardModel:n.includes('core/keys')?window.recallKeys:n.includes('knowledge-model')?window.knowledgeModel:n.includes('detail-modal')?window.detailModalModule:n.includes('markdown-render')?window.markdownModule:{Notice:class{}};${fs.readFileSync(path.join(root,file),'utf8')};return module.exports;})();`});
+ // 知识地图的模块按依赖顺序装：图谱、掌握度、导图布局在视图之前。require 桩按名字查表。
+ await page.evaluate(()=>{const table={'shared/dom':'domModule','shared/date':'dateModule','summary-notes':'summaryModel','reading-rail-model':'railModel','vault-utils':'vaultUtils','learning-hub-model':'hubModel','learning-hub-store':'hubStore','knowledge-graph':'graphModel','/mastery':'masteryModel','knowledge-store':'kStore','mind-map-layout':'mindLayout','mind-map-view':'mindView','concept-map-view':'conceptView','quiz-model':'quizModel','quiz-store':'quizStore','quiz-view':'quizView','markdown-render':'markdownModule'};
+   window.hubRequire=n=>{for(const [k,v] of Object.entries(table))if(n.includes(k))return window[v];return {Modal:window.FixtureModal,Notice:class{constructor(message){window.lastNotice=message}}};};});
+ for(const [name,file] of [['railModel','l-os-workbench/reading-rail-model.js'],['vaultUtils','shared/vault-utils.js'],['hubModel','l-os-workbench/learning-hub-model.js'],['hubStore','l-os-workbench/learning-hub-store.js'],['graphModel','l-os-workbench/knowledge-graph.js'],['masteryModel','l-os-workbench/mastery.js'],['kStore','l-os-workbench/knowledge-store.js'],['mindLayout','l-os-workbench/mind-map-layout.js'],['mindView','l-os-workbench/mind-map-view.js'],['conceptView','l-os-workbench/concept-map-view.js'],['hubView','l-os-workbench/learning-hub-view.js'],['quizModel','l-os-workbench/quiz-model.js'],['quizStore','l-os-workbench/quiz-store.js'],['quizView','l-os-workbench/quiz-view.js']])await page.addScriptTag({content:`window.${name}=(()=>{const module={exports:{}};const require=window.hubRequire;${fs.readFileSync(path.join(root,file),'utf8')};return module.exports;})();`});
+ // 7.4 自编教材：模型是纯函数，视图只要 dom 和 Notice。
+ await page.addScriptTag({content:`window.ownBooksModel=(()=>{const module={exports:{}};${fs.readFileSync(path.join(root,'l-os-workbench/own-books-model.js'),'utf8')};return module.exports;})();`});
+ await page.addScriptTag({content:`window.ownBooksView=(()=>{const module={exports:{}};const require=n=>n.includes('shared/dom')?window.domModule:n.includes('own-books-model')?window.ownBooksModel:{Notice:class{constructor(t){window.lastNotice=t}}};${fs.readFileSync(path.join(root,'l-os-workbench/own-books-view.js'),'utf8')};return module.exports;})();`});
+ await page.addScriptTag({content:`window.ConsoleView=(()=>{const module={exports:{}};const require=name=>name.includes('own-books-view')?window.ownBooksView:name.includes('learning-hub-view')?window.hubView:name.includes('quiz-view')?window.quizView:name.includes('timetable-model')?window.timetableModel:name.includes('class-ledger')?window.classLedgerModel:name.includes('shared/dom')?window.domModule:name.includes('knowledge-view')?window.knowledgeView:name.includes('summary-view')?window.summaryView:name.includes('console-model')?window.previewModel:name.includes('formula-model')?window.formulaModel:name.includes('markdown-render')?window.markdownModule:name.includes('due')?window.dueModule:name.includes('detail-modal')?window.detailModalModule:name.includes('action-editor')?window.editorModule:name.includes('budget')?window.budgetModule:{ItemView:class{constructor(){this.contentEl=document.querySelector('.view-content')}registerEvent(){}},Notice:class{constructor(t){window.lastNotice=t}},Modal:window.FixtureModal,setIcon(e,name){e.textContent=({sun:'☀','check-square':'✓','book-open':'▤',flame:'♨',files:'▱','rotate-ccw':'↶'})[name]||'○'}};${fs.readFileSync(path.join(root,'l-os-workbench/console-view.js'),'utf8')};return module.exports.ConsoleView;})();`});
+ const courses=JSON.parse(fs.readFileSync(path.join(root,'l-os-workbench/main.js'),'utf8').match(/const COURSES = (\[.*\]);/)[1]);
  await page.evaluate(async courses=>{
    const day=previewModel.dayKey();
    const files=Array.from({length:85},(_,i)=>({path:`03 知识库/学习笔记/${i===0?'数学分析 · 多元函数的微分与积分':'知识卡片 '+i}.md`,basename:i===0?'数学分析 · 多元函数的微分与积分':'知识卡片 '+i,extension:'md',stat:{mtime:Date.now()-i*1000}}));
@@ -61,32 +71,38 @@ const root=path.resolve(__dirname,'..'),out=path.resolve(process.env.VISUAL_OUTP
    const sessions=[{phase:'focus',seconds:1800,endedAt:Date.now(),task:'整理数学分析笔记',completed:true}];
    const records={'book/数学分析 II · 教材.pdf':{position:{page:42},totalPages:320,annotations:[{kind:'question',note:'如何理解隐函数定理的局部性？',page:37}],daily:{[day]:1800},dailyPages:{[day]:[35,36,37,38,39,40,41,42]}}};
    const focus={manifest:{version:'4.5.0'},settings:()=>({focusMinutes:p.data.focusMinutes,breakMinutes:p.data.breakMinutes}),setSettings:async patch=>Object.assign(p.data,patch)};
- const capture={index:{all:async()=>tasks},createProject:async name=>{const file={path:'02 项目/'+name+'.md',basename:name,extension:'md'};files.push(file);return file;},renameProject:async(file,name)=>{const old=file.path;file.path='02 项目/'+name+'.md';file.basename=name;window.projectRename={old,name:file.path};return file;},deleteProject:async file=>{window.projectDeleted=file.path;files.splice(files.indexOf(file),1);},readProject:async()=>({}),patchProject:async(file,before,patch)=>{window.projectPatch=patch;},patchTask:async(t,patch)=>{if(window.rejectPatch)throw Error('模拟写入失败');Object.assign(t,patch);if(patch.title)t.text=patch.title;return t;},addTask:async text=>{tasks.push({id:'new',text,raw:'- [ ] '+text,path:'00 工作台/今日任务.md',scheduled:day});},manifest:{version:'4.0.0'},listTasks:async({filter='open',query=''}={})=>tasks.filter(t=>(filter==='deleted'?t.deleted:!t.deleted&&(filter==='done'?t.done:!t.done))&&(filter!=='today'||t.scheduled===day||t.due)&&(filter!=='overdue'||t.due)&&(t.text+t.path).includes(query)),taskStats:async()=>({open:tasks.filter(t=>!t.done).length,done:tasks.filter(t=>t.done).length}),createNote:()=>{window.noteCreated=true;},updateNote:async(file,action)=>{window.noteAction=action;if(action==='delete')files.splice(files.indexOf(file),1);},deleteTask:async t=>{t.deleted=true;},updateTask:async(t,action)=>{if(action==='restore')t.deleted=false;if(action==='done')t.done=true;if(action==='reopen')t.done=false;if(action==='today')t.scheduled=day;if(action==='unschedule')t.scheduled='';}};
+ const capture={index:{all:async()=>tasks},createProject:async name=>{const file={path:'02 项目/'+name+'.md',basename:name,extension:'md'};files.push(file);return file;},renameProject:async(file,name)=>{const old=file.path;file.path='02 项目/'+name+'.md';file.basename=name;window.projectRename={old,name:file.path};return file;},deleteProject:async file=>{window.projectDeleted=file.path;files.splice(files.indexOf(file),1);},readProject:async()=>({}),patchProject:async(file,before,patch)=>{window.projectPatch=patch;},patchTask:async(t,patch)=>{if(window.rejectPatch)throw Error('模拟写入失败');Object.assign(t,patch);if(patch.title)t.text=patch.title;return t;},addTask:async text=>{tasks.push({id:'new',text,raw:'- [ ] '+text,path:'00 工作台/今日任务.md',scheduled:day});},manifest:{version:'4.0.0'},listTasks:async({filter='open',query=''}={})=>tasks.filter(t=>(filter==='deleted'?t.deleted:!t.deleted&&(filter==='done'?t.done:!t.done))&&(filter!=='today'||t.scheduled===day||t.due)&&(filter!=='overdue'||t.due)&&(t.text+t.path).includes(query)),taskStats:async()=>({open:tasks.filter(t=>!t.done).length,done:tasks.filter(t=>t.done).length}),createNote:()=>{window.noteCreated=true;},updateNote:async(file,action)=>{window.noteAction=action;file.status=action==='done'?'done':'todo';if(action==='delete')files.splice(files.indexOf(file),1);},deleteTask:async t=>{t.deleted=true;},updateTask:async(t,action)=>{if(action==='restore')t.deleted=false;if(action==='done')t.done=true;if(action==='reopen')t.done=false;if(action==='today')t.scheduled=day;if(action==='unschedule')t.scheduled='';}};
    const cards=[{path:files[0].path,due:Date.now()-1000,interval:1,reviews:2}];
    const recall={manifest:{version:'1.0.0'},list:()=>cards,add:async path=>{if(!cards.some(c=>c.path===path))cards.push({path,due:0});},remove:async path=>{cards.splice(cards.findIndex(c=>c.path===path),1);},review:()=>{window.reviewOpened=true;}};
-   const owners={'codex-focus':focus,'codex-capture':capture,'codex-recall':recall};
+   const owners={'l-os-focus':focus,'l-os-capture':capture,'l-os-recall':recall};
    const p={manifest:{version:'4.1.1'},views:new Set(),data:{timer,sessions,focusMinutes:25,breakMinutes:5,priorities:{[day]:'理解多元微积分，把关键推导写清楚'},lastTextbook:'book/数学分析 II · 教材.pdf'},study:{data:{records},overview:()=>{}},
-    app:{plugins:{getPlugin:id=>owners[id]},workspace:{on:()=>({})},vault:{getFiles:()=>files,getMarkdownFiles:()=>files.filter(f=>f.extension==='md'),cachedRead:async()=> '# 多元函数的微分\n\n全微分描述函数在一点附近的线性变化。\n\n## 核心关系\n\ndf = fₓ dx + fᵧ dy\n\n存在偏导数，并不意味着函数在该点可微。需要检查各方向的变化能否统一为线性近似。\n\n## 下一次复习\n\n试着画出切平面，解释误差项为什么必须是高阶无穷小。'},metadataCache:{getFileCache:()=>({frontmatter:{tags:['数学','微积分']}}),resolvedLinks:{}}},
+    app:{plugins:{getPlugin:id=>owners[id]},workspace:{on:()=>({})},vault:{getFiles:()=>files,getMarkdownFiles:()=>files.filter(f=>f.extension==='md'),cachedRead:async()=> '# 多元函数的微分\n\n全微分描述函数在一点附近的线性变化。\n\n## 核心关系\n\ndf = fₓ dx + fᵧ dy\n\n存在偏导数，并不意味着函数在该点可微。需要检查各方向的变化能否统一为线性近似。\n\n## 下一次复习\n\n试着画出切平面，解释误差项为什么必须是高阶无穷小。'},metadataCache:{getFileCache:f=>({frontmatter:{tags:['数学','微积分'],status:f.status}}),resolvedLinks:{}}},
     focusSelection:{read:async()=>window.chosenFocus||'',select:async task=>{window.chosenFocus=task.id;return task;}},save:async()=>{},run:async fn=>fn(),open:async path=>{window.openedPath=path;},openDaily:async()=>{},captureTask:()=>{window.captured=true;},captureNote:()=>{},captureProject:()=>{},openVersionLog:()=>{},
     minutes:()=>timer.phase==='focus'?p.data.focusMinutes:p.data.breakMinutes,timerCore:{remaining:t=>t.remaining},
     toggle:async task=>{timer.task=task;timer.status=timer.status==='running'?'paused':'running';},stop:async()=>{timer.status='idle';},setPhase:async phase=>timer.phase=phase,
     updatePriority:async value=>{p.data.priorities[day]=value;},startPlan:async t=>{timer.task=t.text;timer.status='running';},
     courseCatalog:()=>courses,timetable:async()=>window.timetableData,courseStateFor:c=>({next:c.id==='052475'?'第三章 · 完成全微分与复合函数求导练习':'整理本周课堂笔记，完成配套习题',exam:'2026-12-22'}),courseBooksFor:()=>[files.at(-1).path],courseStatsFor:()=>({minutes:50,questions:1}),startCourse:async()=>{},openCourse:async()=>{},openClassNote:async c=>{window.openedClassNote=c.title;},configureCourse:()=>{},openTextbook:async f=>{window.openedPath=f.path;},openLastTextbook:async()=>{},
    };
-   owners['codex-study']={engine:p.study,manifest:{version:'3.6.0'}};owners['codex-workbench']=p;
+   owners['l-os-study']={engine:p.study,manifest:{version:'3.6.0'}};owners['l-os-workbench']=p;
    // 四个挂件全开，倒计日给两条：满配下左栏最挤，底部按钮最容易被顶出去。
    window.widgetData={order:[{id:'clock',on:true,slot:'top'},{id:'quote',on:true,slot:'bottom'},{id:'countdown',on:true,slot:'bottom'},{id:'weather',on:true,slot:'header'}],clock:{seconds:true,date:true},countdown:{items:[{name:'期末考',date:'2027-01-05'},{name:'开题报告',date:'2026-12-01'}],max:3},weather:{lat:45.46,lon:9.19,place:'米兰',refreshMinutes:60}};
-   window.widgets=new CodexWidgets();await window.widgets.onload();owners['codex-widgets']=window.widgets;
-   p.dailyAudit=async()=>({seconds:1500,switches:1,interruptions:1,projects:{'02 项目/数学学习.md':900,'独立任务 / 临时杂项':600},done:[],pending:tasks.slice(0,3),outputs:files.slice(0,2)});p.daily=async()=>({path:'05 日记/'+day+'.md'});p.saveDailyFeedback=async()=>{};p.setTomorrow=async()=>{};p.rolloverDaily=async()=>{};files.push({path:'02 项目/本周学习计划.md',basename:'本周学习计划',extension:'md',stat:{mtime:1}});capture.app=p.app;capture.captureTask=options=>new TaskModal(capture,options).open();capture.createTask=async value=>{if(window.failCreate)throw Error('模拟保存失败');window.createdTask=value;};p.captureTask=()=>capture.captureTask();window.v=new ConsoleView({},p);window.fixtureTasks=tasks;await v.onOpen();
+   window.widgets=new LOSWidgets();await window.widgets.onload();owners['l-os-widgets']=window.widgets;
+   // 课堂回顾：固定在 2026-09-24 周四（三门课），四种状态各来一行，前两天留几篇欠账。
+   const written={'2026-09-24/057274':18.5,'2026-09-24/086552':1.4,'2026-09-24/060112':'shell','2026-09-23/086552':30.6,'2026-09-23/089257':null,'2026-09-22/060112':'shell','2026-09-22/089257':12.2};
+   p.classLedger=async()=>{const ledger=classLedgerModel.buildLedger({timetable:window.timetableData,today:'2026-09-24',since:'2026-09-22',note:(course,key)=>{const k=key+'/'+course.id;if(!(k in written))return{exists:false,shell:false,pages:null};const w=written[k];return w==='shell'?{exists:true,shell:true,pages:0}:{exists:true,shell:false,pages:w};}});for(const row of ledger.next.rows)row.last=row.course.id==='089257'?null:{key:'2026-09-24',path:'笔记/'+row.course.id+'.md'};return ledger;};
+   p.setNoteCourse=async(id,on)=>{window.noteCourse={id,on};};files.push({path:'02 项目/本周学习计划.md',basename:'本周学习计划',extension:'md',stat:{mtime:1}});capture.app=p.app;capture.captureTask=options=>new TaskModal(capture,options).open();capture.createTask=async value=>{if(window.failCreate)throw Error('模拟保存失败');window.createdTask=value;};p.captureTask=()=>capture.captureTask();window.v=new ConsoleView({},p);window.fixtureTasks=tasks;await v.onOpen();
  },courses);
+ if(process.env.HUB_ONLY==='1'){await require('./learning-hub-visual.cjs')(page,out);await require('./quiz-visual.cjs')(page,out);assert.deepEqual(errors,[]);await browser.close();console.log('Learning hub visual checks passed.');return;}
  await require('./summary-visual.cjs')(page,out);
+ await require('./knowledge-visual.cjs')(page,out);
+ if(process.env.KNOWLEDGE_ONLY==='1'){assert.deepEqual(errors,[]);await browser.close();console.log('Knowledge and summary visual checks passed.');return;}
  const results=[];
  for(const theme of ['light','dark']){
   await page.evaluate(t=>document.body.className=t==='dark'?'theme-dark':'',theme);
   for(const [width,height] of [[1600,900],[1100,720],[760,640],[420,720],[360,600],[900,400],[320,480]]){
    await page.setViewportSize({width,height});
    // 5.3 侧栏：十项分三组后必须仍然装得下。宽松高度下导航区不许出现滚动；
-   // 矮窗口允许导航区自己滚，但「快速捕获」等底部按钮必须始终留在视口内。
+   // 矮窗口允许导航区自己滚，但底部按钮（7.4 起只剩「模块与版本」）必须始终留在视口内。
    {
     const rail=await page.evaluate(()=>{
       const nav=document.querySelector('.os-nav'),foot=document.querySelector('.os-rail-foot');
@@ -143,7 +159,8 @@ const root=path.resolve(__dirname,'..'),out=path.resolve(process.env.VISUAL_OUTP
     } else assert.ok(width<=800,`页头挂件不该在 ${width}x${height} 下消失`);
    }
     // 7.0 加了第六项「课表」。数字写死是故意的：导航多一项少一项都该有人看见。
-    assert.equal(rail.buttons,7,`导航项数异常：${rail.buttons}`);
+    // 知识拆成「知识地图」「周五自测」「学习进展」之后是 9 项，7.4 加「自编教材」是 10 项。
+    assert.equal(rail.buttons,10,`导航项数异常：${rail.buttons}`);
     // 6.4：挂件区接管了导航和底部按钮之间的空档。它 flex-basis 为 0 且自带滚动，
     // 所以「挤不出底部按钮」这条不是自动成立的——宽松尺寸下四块全画得出，窄/矮时整块收起。
     if(rail.widgets){
@@ -169,7 +186,7 @@ const root=path.resolve(__dirname,'..'),out=path.resolve(process.env.VISUAL_OUTP
    for(const tab of ['today','tasks','projects','courses','books','questions','knowledge','daily','heatmap','recall','schedule']){
     await page.evaluate(tab=>v.setTab(tab),tab);await page.waitForTimeout(60);
     const result=await page.evaluate(tab=>{
-      const bounded=['.os-root','.os-app','.os-main','.os-content','.os-today-grid','.os-audit-board'];
+      const bounded=['.os-root','.os-app','.os-main','.os-content','.os-today-grid','.os-ledger'];
       const broken=bounded.flatMap(s=>[...document.querySelectorAll(s)]).filter(e=>e.clientHeight>0&&(e.scrollHeight>e.clientHeight+2||e.scrollWidth>e.clientWidth+2)).map(e=>({class:e.className,client:[e.clientWidth,e.clientHeight],scroll:[e.scrollWidth,e.scrollHeight]}));
       const bodyOverflow=document.documentElement.scrollHeight>innerHeight+2||document.documentElement.scrollWidth>innerWidth+2;
       const heatmap=tab==='heatmap'?(()=>{
@@ -177,11 +194,12 @@ const root=path.resolve(__dirname,'..'),out=path.resolve(process.env.VISUAL_OUTP
         const alignment=weekdays.map((label,index)=>{const a=label.getBoundingClientRect(),b=cells[index]?.getBoundingClientRect();return b?Math.abs((a.top+a.height/2)-(b.top+b.height/2)):Infinity;});
         return {scrollWidth:wrap?.scrollWidth||0,clientWidth:wrap?.clientWidth||0,maxRowDelta:Math.max(...alignment)};
       })():null;
-       const auditFields=tab==='daily'?[...document.querySelectorAll('.os-audit-field input,.os-audit-card select')].map(field=>{const a=field.getBoundingClientRect(),b=field.closest('.os-audit-card-body').getBoundingClientRect(),style=getComputedStyle(field);return {left:a.left,right:a.right,parentLeft:b.left,parentRight:b.right,boxSizing:style.boxSizing,maxWidth:style.maxWidth};}):null;
+       const ledgerRows=tab==='daily'?[...document.querySelectorAll('.os-ledger-row')].map(row=>{const a=row.getBoundingClientRect(),col=row.closest('.os-ledger-col').getBoundingClientRect();const parts=[...row.children].map(c=>c.getBoundingClientRect());return {text:row.textContent,left:a.left,right:a.right,colLeft:col.left,colRight:col.right,inside:parts.every(p=>p.left>=a.left-1&&p.right<=a.right+1),overflow:row.scrollWidth>row.clientWidth+1};}):null;
        const projectFields=tab==='projects'?[...document.querySelectorAll('.os-project-container>.os-input')].map(field=>{const a=field.getBoundingClientRect(),b=field.parentElement.getBoundingClientRect();return {left:a.left,right:a.right,parentLeft:b.left,parentRight:b.right};}):null;
-       return {broken,bodyOverflow,heatmap,auditFields,projectFields};
+       return {broken,bodyOverflow,heatmap,ledgerRows,projectFields};
     },tab);
-     if(tab==='daily'){assert.equal(await page.locator('.os-audit-board').evaluate(e=>e.scrollHeight===e.clientHeight&&getComputedStyle(e).overflowY==='hidden'),true);assert.equal(await page.locator('.os-audit-card').count(),6);assert.equal(result.auditFields.length,5);assert.ok(result.auditFields.every(field=>field.left>=field.parentLeft-1&&field.right<=field.parentRight+1&&field.boxSizing==='border-box'&&field.maxWidth!=='none'),JSON.stringify(result.auditFields));if(width===420&&theme==='light')await page.screenshot({path:path.join(out,'daily-mobile.png')});}
+     if(tab==='heatmap')assert.equal(await page.evaluate(()=>v.tab),'daily');
+     if(tab==='daily'){assert.equal(await page.locator('.os-ledger-col').count(),6);if(width>=1100){const fit=await page.evaluate(()=>{const body=document.querySelector('.os-ledger-panel>.os-panel-body'),card=document.querySelector('.os-heat-chart').getBoundingClientRect(),grid=document.querySelector('.os-heatmap-grid').getBoundingClientRect(),legend=document.querySelector('.os-heat-chart .os-heatmap-legend').getBoundingClientRect();return {scroll:body.scrollHeight,client:body.clientHeight,gridBottom:grid.bottom,legendBottom:legend.bottom,cardBottom:card.bottom,viewport:innerHeight,cell:document.querySelector('.os-heatmap-cell').getBoundingClientRect().height,cardHeight:card.height,containerType:getComputedStyle(document.querySelector('.os-heat-chart')).containerType,rows:getComputedStyle(document.querySelector('.os-heatmap-grid')).gridTemplateRows,weeks:document.querySelectorAll('.os-heat-chart .os-heatmap-months span').length,gridRight:grid.right,cardRight:card.right,labels:[...document.querySelectorAll('.os-heat-chart .os-heatmap-weekdays span')].map(e=>e.textContent).join('')};});assert.ok(fit.scroll<=fit.client+1&&fit.legendBottom<=fit.cardBottom+1&&fit.cardBottom<=fit.viewport&&fit.cell>=8,`回顾在 ${width}x${height} 下一屏放不下：${JSON.stringify(fit)}`);assert.ok(fit.weeks>=12&&fit.cardRight-fit.gridRight<=fit.cell+5+30,`热力方格没铺满卡：${JSON.stringify(fit)}`);assert.equal(fit.labels,fit.cell>=14?'一二三四五六日':'一三五日',JSON.stringify(fit));if(width===1600)assert.ok(fit.weeks>12,`宽屏应多于 12 周：${JSON.stringify(fit)}`);}assert.equal(await page.locator('.os-sections').evaluate(e=>e.hidden),true);assert.equal(await page.locator('.os-heatmap-grid').count(),1);assert.equal(result.ledgerRows.length,3+3+3+2);assert.ok(result.ledgerRows.every(r=>r.inside&&!r.overflow&&r.left>=r.colLeft-1&&r.right<=r.colRight+1),JSON.stringify(result.ledgerRows.filter(r=>!(r.inside&&!r.overflow&&r.left>=r.colLeft-1&&r.right<=r.colRight+1))));if(width===420&&theme==='light')await page.screenshot({path:path.join(out,'daily-mobile.png')});}
      if(tab==='projects'&&result.projectFields.length){assert.ok(result.projectFields.every(field=>field.left>=field.parentLeft-1&&field.right<=field.parentRight+1),JSON.stringify(result.projectFields));}
     if(tab==='heatmap'){assert.ok(result.heatmap.scrollWidth<=result.heatmap.clientWidth+1,JSON.stringify(result.heatmap));assert.ok(result.heatmap.maxRowDelta<=1,JSON.stringify(result.heatmap));
      // 选中格用 outline 画描边。outline 不占布局空间，所以 scrollWidth 永远发现不了它被裁：
@@ -305,8 +323,8 @@ const root=path.resolve(__dirname,'..'),out=path.resolve(process.env.VISUAL_OUTP
  await page.getByPlaceholder('搜索任务或来源笔记').fill('伯努利');await page.waitForTimeout(200);
  assert.ok(await page.locator('.os-task-row').count()>0);assert.equal(await page.locator('.os-task-title').filter({hasText:'多元'}).count(),0);
  await page.locator('.os-check').first().click();assert.equal(await page.evaluate(()=>fixtureTasks.filter(t=>t.done).length),1);
- await page.evaluate(()=>v.setTab('knowledge'));await page.locator('.os-note-row').first().click();assert.ok(await page.locator('.os-excerpt').textContent());
- await page.getByRole('button',{name:'加入复习',exact:true}).click();
+ await page.evaluate(()=>v.setTab('library'));await page.locator('.os-note-row').first().click();assert.ok(await page.locator('.os-knowledge-markdown').textContent());
+ await page.getByRole('button',{name:'开始回忆',exact:true}).click();
  // 6.6 的形变 CTA：空闲时只有开始键，跑起来才裂成 暂停 / 结束。
  // 按名字找按钮在这里靠不住——今日要务卡里也有一个「开始专注」，
  // 而站里那个现在带着 ▶。按结构找，再验两个状态各自该有什么。
@@ -432,8 +450,6 @@ const root=path.resolve(__dirname,'..'),out=path.resolve(process.env.VISUAL_OUTP
    // 轮次珠子：四颗，今天完成过一段就该点亮一颗。
    assert.equal(await page.locator('.os-bead').count(),4);
    assert.ok(await page.locator('.os-bead.is-done').count()>=1,'夹具里今天有一段完成的专注，至少该亮一颗');
-   // 还没选过今日要务，绑定条应当是那句邀请。绑上之后什么样，在下面选完再验。
-   assert.equal(await page.locator('.os-focus-bind').textContent(),'＋ 关联任务');
  }
  {
    // 空转的 tick 不许碰 DOM。
@@ -479,7 +495,7 @@ const root=path.resolve(__dirname,'..'),out=path.resolve(process.env.VISUAL_OUTP
  await page.getByRole('button',{name:'已删除',exact:true}).click();assert.equal(await page.locator('.os-task-row').count(),1);
  await page.locator('.os-task-row').first().hover();
  await page.getByRole('button',{name:'恢复',exact:true}).click();assert.equal(await page.locator('.os-task-row').count(),0);
- await page.evaluate(()=>v.setTab('knowledge'));await page.getByRole('button',{name:'新建笔记',exact:true}).click();assert.equal(await page.evaluate(()=>window.noteCreated),true);
+ await page.evaluate(()=>v.setTab('library'));await page.getByRole('button',{name:'新建笔记',exact:true}).click();assert.equal(await page.evaluate(()=>window.noteCreated),true);
  await page.locator('.os-note-row').first().click();await page.getByRole('button',{name:'标记完成',exact:true}).click();assert.equal(await page.evaluate(()=>window.noteAction),'done');
  await page.getByRole('button',{name:'置为待办',exact:true}).click();assert.equal(await page.evaluate(()=>window.noteAction),'reopen');
  await page.getByRole('button',{name:'删除笔记',exact:true}).click();assert.equal(await page.evaluate(()=>window.noteAction),'delete');
@@ -573,11 +589,10 @@ await firstRow.hover();await page.waitForTimeout(300);await firstRow.getByRole('
  await page.getByRole('button',{name:'收起项目设置',exact:true}).click();await page.evaluate(()=>{for(const e of document.querySelectorAll('body>div'))if(e.style.position==='fixed')e.remove();});
  await page.evaluate(()=>v.refresh(true));await page.getByRole('button',{name:'编辑项目',exact:true}).last().click();assert.equal(await page.getByLabel('项目名称',{exact:true}).inputValue(),'内联测试项目');await page.getByLabel('项目名称',{exact:true}).fill('重命名测试项目');await page.getByLabel('项目名称',{exact:true}).press('Tab');await page.waitForTimeout(60);assert.equal(await page.evaluate(()=>window.projectRename.name),'02 项目/重命名测试项目.md');await page.getByRole('button',{name:'收起项目设置',exact:true}).click();await page.evaluate(()=>{for(const e of document.querySelectorAll('body>div'))if(e.style.position==='fixed')e.remove();});await page.evaluate(()=>v.refresh(true));page.once('dialog',dialog=>dialog.accept());await page.getByRole('button',{name:'删除项目',exact:true}).last().click();await page.waitForTimeout(60);assert.equal(await page.evaluate(()=>window.projectDeleted),'02 项目/重命名测试项目.md');
  await page.evaluate(()=>v.setTab('today'));
- // 7.1 起今日页中间那张卡是「今日课程」，不再显示今日要务；要务只剩专注台的绑定条在说。
+ // 7.1 起今日页中间那张卡是「今日课程」，不再显示今日要务；7.4 连专注台的绑定条也拿掉了，
+ // 要务只在行动页那一行上标出来（上面 data-focus 已验）。
  // 课程随真实日期变（夹具用的是真课表），这里只断言卡在、有内容。
  assert.ok((await page.locator('.os-course-intent-title, .os-course-intent-empty').first().textContent()).trim());
- // 选了今日要务，专注台的绑定条要跟着显示它——两处说的是同一件事，不该各说各的。
- assert.match(await page.locator('.os-focus-bind').textContent(),/正在进行：完成第三章/);
  {
    // 阅读进度条：只在知道总页数时出现，宽度按 页/总页 算。
    const bar=await page.evaluate(()=>{const t=document.querySelector('.os-read-track');
@@ -585,7 +600,6 @@ await firstRow.hover();await page.waitForTimeout(300);await firstRow.getByRole('
    assert.equal(bar.有,true,'夹具的教材记录带 totalPages，应当画出进度条');
    assert.equal(bar.占比,'13.1%','42 / 320');
  }
- assert.equal(await page.locator('.os-focus-bind').evaluate(e=>e.classList.contains('is-bound')),true);
  await page.screenshot({path:path.join(out,'focus-selected.png')});
  await page.evaluate(()=>v.setTab('tasks'));
  await page.getByPlaceholder('添加今日任务，Enter 设置番茄数').fill('今日快速任务');await page.getByRole('button',{name:'添加',exact:true}).click();
@@ -593,12 +607,9 @@ await firstRow.hover();await page.waitForTimeout(300);await firstRow.getByRole('
  assert.equal(await page.evaluate(()=>window.createdTask.repeat),'once');assert.equal(await page.evaluate(()=>window.createdTask.estimated_pomodoros),'2');assert.equal(await page.evaluate(()=>window.createdTask.scheduled===previewModel.dayKey()),true);
  await page.getByRole('button',{name:'＋ 新任务',exact:true}).click();await page.getByLabel('任务名称 *',{exact:true}).fill('完整任务');await page.getByLabel('所属项目',{exact:true}).selectOption('02 项目/本周学习计划.md');await page.getByLabel('优先级',{exact:true}).selectOption('P1');await page.getByLabel('周期与重复',{exact:true}).selectOption('weekly');await page.getByLabel('预计成果 / 完成标准',{exact:true}).fill('交付一张卡片');await page.getByRole('button',{name:'＋ 添加子任务',exact:true}).click();await page.getByLabel('子任务内容',{exact:true}).fill('完成推导');
    await page.getByText('高级设置',{exact:true}).click();await page.getByLabel('单番茄时长（分钟）',{exact:true}).fill('40');await page.evaluate(()=>document.querySelector('.los-task-modal').scrollTop=0);await page.screenshot({path:path.join(out,'task-modal.png')});for(const width of [420,360]){await page.setViewportSize({width,height:720});assert.equal(await page.locator('.los-task-modal').evaluate(e=>e.scrollWidth<=e.clientWidth+2),true);const taskModalFields=await page.locator('.los-task-modal input:not([type=checkbox]),.los-task-modal select,.los-task-modal textarea').evaluateAll(fields=>fields.map(field=>{const a=field.getBoundingClientRect(),b=field.closest('.los-task-modal').getBoundingClientRect();return {left:a.left,right:a.right,parentLeft:b.left,parentRight:b.right,visible:a.width>0&&a.height>0};}));assert.ok(taskModalFields.filter(field=>field.visible).every(field=>field.left>=field.parentLeft-1&&field.right<=field.parentRight+1),JSON.stringify(taskModalFields));}await page.setViewportSize({width:1100,height:720});await page.locator('.los-task-modal').evaluate(e=>e.scrollTop=e.scrollHeight);await page.evaluate(()=>window.failCreate=true);await page.getByRole('button',{name:'创建任务',exact:true}).evaluate(button=>button.form.requestSubmit(button));assert.equal(await page.getByLabel('任务名称 *',{exact:true}).inputValue(),'完整任务');await page.evaluate(()=>window.failCreate=false);await page.getByRole('button',{name:'创建任务',exact:true}).evaluate(button=>button.form.requestSubmit(button));assert.equal(await page.evaluate(()=>window.createdTask.checklist[0].text),'完成推导');assert.equal(await page.evaluate(()=>window.createdTask.repeat),'weekly');
- await page.evaluate(()=>v.setTab('daily'));assert.equal(await page.locator('.os-audit-card').count(),6);assert.equal(await page.locator('.os-audit-card').first().locator('details[open]').count(),1);await page.screenshot({path:path.join(out,'daily-compact.png')});await page.evaluate(()=>v.setTab('today'));
- // 今日页不再有要务选择器；点专注台的绑定条要去行动页，而不是什么都不发生。
- assert.equal(await page.locator('.os-focus-picker').count(),0);
- await page.locator('.os-focus-bind').click();await page.waitForTimeout(80);
- assert.equal(await page.evaluate(()=>v.tab),'tasks');
- await page.evaluate(()=>v.setTab('today'));
+ await page.evaluate(()=>v.setTab('today'));await page.waitForTimeout(60);await page.locator('.os-heat-mini').click();await page.waitForTimeout(80);assert.equal(await page.evaluate(()=>v.tab),'daily');assert.ok(await page.locator('.os-heat-chart').evaluate(e=>{const body=e.closest('.os-panel-body'),a=e.getBoundingClientRect(),b=body.getBoundingClientRect();return a.top>=b.top-1&&a.top<b.bottom;}),'点小热力图之后热力那一行应在视口里');await page.evaluate(()=>v.setTab('daily'));await page.waitForTimeout(60);assert.deepEqual(await page.locator('.os-ledger-col').first().locator('.os-ledger-row').evaluateAll(rows=>rows.map(r=>r.className.match(/is-(missing|empty|measuring|short|done)/)[1])),['done','measuring','missing']);assert.deepEqual(await page.locator('.os-ledger-col').nth(1).locator('.os-ledger-row').evaluateAll(rows=>rows.map(r=>r.className.match(/is-(missing|empty|measuring|short|done)/)[1])),['done','short','empty']);assert.equal(await page.locator('.os-ledger-col').nth(1).locator('.os-ledger-pages').nth(1).innerText(),'1.4 / 2 页');assert.deepEqual(await page.locator('.os-ledger-backlog .os-ledger-row').evaluateAll(rows=>rows.map(r=>r.className.match(/is-(missing|empty|measuring|short|done)/)[1])),['empty','missing']);const nextRows=page.locator('.os-ledger-col').nth(2).locator('.os-ledger-row');assert.equal(await nextRows.count(),3);assert.equal(await nextRows.nth(1).isDisabled(),true);assert.equal(await nextRows.nth(1).evaluate(e=>getComputedStyle(e).opacity),'1');await page.locator('.os-ledger-col').nth(1).locator('.os-ledger-row').first().click();assert.equal(await page.evaluate(()=>window.openedClassNote),'静力学与结构力学');await page.getByRole('button',{name:'选择课程',exact:true}).click();assert.equal(await page.locator('.os-note-course input').count(),4);await page.getByLabel('化工过程计算 记课堂笔记',{exact:true}).uncheck();await page.waitForTimeout(30);assert.deepEqual(await page.evaluate(()=>window.noteCourse),{id:'060112',on:false});await page.keyboard.press('Escape');await page.evaluate(()=>document.querySelector('.modal-container')?.remove());await page.screenshot({path:path.join(out,'daily-compact.png')});await page.evaluate(()=>v.setTab('today'));
+ // 今日页不再有要务选择器，也没有绑定条。
+ assert.equal(await page.locator('.os-focus-picker, .os-focus-bind').count(),0);
  await page.evaluate(()=>{const e=document.createElement('div');e.className='markdown-preview-view';e.style.position='fixed';e.innerHTML='<div class="inline-title">版本迭代</div><h1>版本迭代</h1>';document.body.append(e);});
  assert.equal(await page.locator('.inline-title').isVisible(),false);assert.equal(await page.locator('.markdown-preview-view h1').isVisible(),true);
  // 同屏可见任务行数。6.1 之前是 5 条：行高 117px，其中一行是从不填的预算字段
@@ -641,7 +652,20 @@ await firstRow.hover();await page.waitForTimeout(300);await firstRow.getByRole('
   assert.equal(await page.evaluate(()=>v.plugin.data.quickNotesDraft),'','清空后持久化草稿也应为空');
   await page.screenshot({path:path.join(out,'scratchpad-middle.png')});
  }
- await page.getByRole('button',{name:'侧栏挂件设置',exact:true}).click();
+ // 7.4：挂件设置从左栏挪到页头右上角，左栏不再有这个入口，也不再有「快速捕获」。
+ {
+  const entry=await page.evaluate(()=>{
+    const gear=document.querySelector('.os-header-gear'),header=document.querySelector('.os-header').getBoundingClientRect();
+    const r=gear?.getBoundingClientRect(),last=[...document.querySelectorAll('.os-header-actions>button')].filter(b=>!b.hidden).pop();
+    return {gear:!!gear&&!gear.hidden&&r.width>0,inHeader:!!r&&r.right<=header.right+1&&r.top>=header.top-1,last:last===gear,
+      railGear:!!document.querySelector('.os-rail .ow-gear'),capture:!!document.querySelector('.os-rail .os-capture'),
+      railText:document.querySelector('.os-rail').textContent};
+  });
+  assert.ok(entry.gear&&entry.inHeader&&entry.last,'挂件设置应在页头右上角最后一个：'+JSON.stringify(entry));
+  assert.ok(!entry.railGear&&!entry.railText.includes('挂件设置'),'左栏不应再有挂件设置');
+  assert.ok(!entry.capture&&!entry.railText.includes('快速捕获'),'左栏不应再有快速捕获');
+ }
+ await page.getByRole('button',{name:'挂件设置',exact:true}).click();
  await page.locator('.ow-settings').waitFor();
  assert.equal(await page.locator('.ow-order-row').count(),4,'四个挂件都应出现在排序列表里');
  {
@@ -731,6 +755,23 @@ await firstRow.hover();await page.waitForTimeout(300);await firstRow.getByRole('
  }
  await page.getByRole('button',{name:'关闭',exact:true}).click();
  await page.locator('.ow-settings').waitFor({state:'detached'});
+ // 7.4 自编教材页。夹具里没有登记表，book/ 下那份教材应当以「未登记」出现，而不是空页。
+ {
+  await page.evaluate(()=>v.setTab('ownbooks'));await page.waitForTimeout(60);
+  const own=await page.evaluate(()=>({title:document.querySelector('.os-heading h1').textContent,
+    active:document.querySelector('.os-nav-button.is-active')?.textContent,
+    groups:[...document.querySelectorAll('.os-own-series h3')].map(h=>h.textContent),
+    rows:document.querySelectorAll('.os-own-book').length,
+    status:document.querySelector('.os-page-status').textContent,
+    registry:[...document.querySelectorAll('.os-page-ownbooks .os-tools button')].map(b=>b.textContent)}));
+  assert.equal(own.title,'自编教材');
+  assert.match(own.active,/自编教材/);
+  assert.deepEqual(own.groups,['未登记'],'book/ 下没登记的 PDF 应归进未登记：'+JSON.stringify(own));
+  assert.equal(own.rows,1);
+  assert.match(own.status,/^1 本/);
+  assert.deepEqual(own.registry,['新建登记表']);
+  await page.screenshot({path:path.join(out,'own-books.png')});
+ }
  assert.deepEqual(errors,[]);fs.writeFileSync(path.join(out,'layout-results.json'),JSON.stringify({results,errors,interactions:'search, complete, delete/restore, note CRUD controls, preview, recall, timer, mobile pane, weather, duplicate title'},null,2));
  console.log(`Passed ${results.length} layout checks and interactive flows. Screenshots: ${out}`);await browser.close();
 })().catch(e=>{console.error(e);process.exit(1);});

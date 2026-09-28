@@ -50,8 +50,8 @@ Module._load = function (name) {
 global.document = { createElement: () => fakeEl() };
 global.window = { setInterval: () => 0 };
 
-const CodexWorkbench = require("../codex-workbench/main.js");
-const { EstimateModal } = require("../codex-workbench/estimate-modal.js");
+const LOSWorkbench = require("../l-os-workbench/main.js");
+const { EstimateModal } = require("../l-os-workbench/estimate-modal.js");
 
 // EstimateModal 在 onOpen 里把两个动作挂到实例上，夹具据此模拟点击。
 const realOnOpen = EstimateModal.prototype.onOpen;
@@ -74,7 +74,7 @@ function host(tasks, sessions, patched) {
 }
 
 (async () => {
-  const ask = CodexWorkbench.prototype.askEstimate;
+  const ask = LOSWorkbench.prototype.askEstimate;
 
   // 1. 没估过、没做过 → 问，答 2 就写回去，并补上番茄时长单位。
   {

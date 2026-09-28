@@ -1,6 +1,6 @@
 const assert=require('node:assert/strict'),Module=require('node:module');
 const original=Module._load,notices=[];Module._load=function(name){if(name==='obsidian')return {Plugin:class{},Modal:class{},Notice:class{constructor(message){notices.push(message);}}};return original.apply(this,arguments);};
-const Focus=require('../codex-focus/main'),core=require('../shared/timer-core'),Capture=require('../codex-capture/main'),creation=require('../codex-capture/core/task-create'),index=require('../codex-capture/core/task-index');
+const Focus=require('../l-os-focus/main'),core=require('../shared/timer-core'),Capture=require('../l-os-capture/main'),creation=require('../l-os-capture/core/task-create'),index=require('../l-os-capture/core/task-index');
 (async()=>{
  const f=Object.create(Focus.prototype);f.operations=Promise.resolve();f.app={workspace:{trigger(){}}};f.save=async()=>{};f.data={timer:core.initial(),sessions:[],settings:{focusMinutes:25}};
  await f.dispatch('start',{task:'A',taskId:'a',minutes:40});assert.equal(f.data.timer.duration,2400);const id=f.data.timer.id,end=f.data.timer.endAt;

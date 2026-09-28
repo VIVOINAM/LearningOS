@@ -1,0 +1,184 @@
+/* 侧栏挂件。令牌在 shared/tokens.css，构建时内联到本文件最前面。
+   挂件渲染在工作台左栏里，但样式写在这里而不是工作台：
+   renderRail(host) 是公开 API，谁调都该拿到一块长得对的 DOM。 */
+
+.ow-card {
+  display: flex; flex-direction: column; gap: 2px; min-width: 0;
+  padding: 9px 11px; border-radius: 12px;
+  background: var(--os-glass);
+  -webkit-backdrop-filter: var(--os-glass-blur); backdrop-filter: var(--os-glass-blur);
+  /* 7.0：iOS 27 的玻璃边——外圈一道压暗的边加内圈高光，不再是四色描边。 */
+  border: 0; box-shadow: 0 0 0 .5px var(--os-glass-rim), var(--os-glass-inset);
+}
+
+/* 时间不要外框：它是左栏最上面一组字，不是一张卡。加上框就变成积木堆叠的第一块，
+   而它底下还有三块——整条左栏会读成一摞盒子。底部留一道细线和名言分隔就够了。 */
+/* 时间和名言都脱掉盒子，直接沉在磨砂底板上，中间一道细线分隔。
+   左栏原来是四块盒子摞在一起，玻璃化之后反而更明显——半透明的盒子摞半透明的盒子。 */
+.os-widgets .ow-clock, .os-widgets .ow-quote {
+  background: transparent; border: 0; border-radius: 0; box-shadow: none;
+  -webkit-backdrop-filter: none; backdrop-filter: none;
+  padding: 2px 4px 10px; border-bottom: 1px solid var(--os-glass-shade);
+}
+.os-widgets .ow-quote { padding-top: 8px; }
+.ow-title {
+  font-size: var(--fs-meta); color: var(--os-muted); font-weight: 600;
+  letter-spacing: .08em; margin: 0 0 2px;
+  overflow: hidden; white-space: nowrap; text-overflow: ellipsis;
+}
+.ow-muted { font-size: var(--fs-meta); color: var(--os-muted); line-height: 1.5; margin: 0; overflow-wrap: anywhere; }
+
+/* 时间。表盘字体和专注计时的大钟同一套衬线，是同一个东西的两个尺寸。
+   nowrap 是硬要求：这一行折行，卡片就从 62px 长到 99px，四个挂件一起溢出。
+   最长的情况是十二小时制加秒的「12:00:00」，八个字符，在 140px 的可用宽度里放得下。 */
+.ow-clock-time {
+  font-family: var(--os-display); font-variant-numeric: tabular-nums;
+  font-size: 27px; line-height: 1.1; letter-spacing: -.5px; color: var(--os-ink);
+  white-space: nowrap; overflow: hidden; text-overflow: clip;
+}
+.ow-clock-date { font-size: var(--fs-meta); color: var(--os-muted); overflow-wrap: anywhere; margin-top: 1px; }
+
+/* 每日一言。行高放松，因为它是唯一一块要真读的内容。 */
+.ow-quote .ow-quote-text {
+  font-size: var(--fs-meta); line-height: 1.75; color: var(--os-ink);
+  margin: 0; overflow-wrap: anywhere;
+}
+
+.ow-count-row { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; padding: 2px 0; min-width: 0; }
+.ow-count-name { font-size: var(--fs-meta); color: var(--os-ink); overflow: hidden; white-space: nowrap; text-overflow: ellipsis; min-width: 0; }
+.ow-count-days { font-size: var(--fs-meta); color: var(--os-muted); white-space: nowrap; flex: none; font-variant-numeric: tabular-nums; }
+.ow-count-days.is-near { color: var(--os-accent-2); font-weight: 650; }
+.ow-count-days.is-past { color: var(--os-muted); opacity: .75; }
+
+/* 左栏竖版的天气：图标和温度并排，天气文字在底下。
+   和横排版共用同一幕，只是排布不同。字改用 --os-display——原来这里写死了
+   Georgia，而设计系统里那三处数字（专注计时、左栏时钟、页头气温）本该
+   是同一种字的三个尺寸，这一处一直在外面。 */
+.ow-wx-row { display: flex; align-items: center; gap: 8px; min-width: 0; }
+.ow-wx-temp {
+  font-family: var(--os-display); font-variant-numeric: tabular-nums;
+  font-size: 23px; line-height: 1.1; color: var(--os-ink);
+}
+.ow-wx-meta {
+  font-size: var(--fs-meta); color: var(--os-muted);
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0;
+}
+
+/* ---------- 页头里的横排渲染 ---------- */
+
+/* 7.0：页头已经是一整条磨砂顶栏，天气在里面做成一枚玻璃胶囊，和旁边的按钮同一种形状。
+   6.x 这里刻意不做卡片（「一行三个带框的东西谁也不像主角」）；现在三样都是胶囊，
+   形状一致之后它们读成一组工具，而不是三个互相打架的盒子。 */
+.os-widgets-header .ow-card {
+  flex-direction: row; align-items: center; gap: 8px;
+  padding: 3px 16px 3px 10px; border-radius: var(--os-r-pill);
+  white-space: nowrap; min-width: 0;
+}
+/* 7.0：从「四样平铺、一样重」改成一个读数块。
+   温度当主，天气和地名退成它底下的一行小字；图标和温度取同一视觉重量。 */
+.ow-wx-read { display: flex; flex-direction: column; align-items: flex-start; gap: 1px; min-width: 0; }
+.os-widgets-header .ow-wx-temp { font-size: 20px; font-weight: 600; }
+.os-widgets-header .ow-wx-meta { letter-spacing: .02em; }
+
+/* ---------- 天气图标：自绘 + 动效 ---------- */
+
+/* 图形由 main.js 用 createElementNS 建（部署白名单只有三个文件，资源文件
+   到不了插件目录）。这里只管尺寸和动。
+
+   动画一律只动 transform 和 opacity——这两样走合成器，不引起重排重绘。
+   6.6.1 那一轮为了一个每秒都在动的进度环查了四个闪烁来源，最后关掉了
+   backdrop-filter；7.0 又把模糊打开了，所以这里更不能碰布局属性。 */
+
+.ow-art { flex: none; width: 26px; height: 28px; color: var(--os-body); overflow: visible; }
+.os-widgets-header .ow-art { width: 26px; height: 28px; }
+/* 退路：幕缺了就用 lucide 字形，再不行整段去掉只留温度。 */
+.ow-art-fallback { display: inline-flex; align-self: center; color: var(--os-muted); flex: none; }
+.ow-art-fallback svg { width: 18px; height: 18px; stroke-width: 1.6; }
+
+/* transform-box: fill-box 让 transform-origin 落在元素自己的盒子中心，
+   而不是 SVG 画布原点——不写这一条，「原地转」会变成绕左上角甩。 */
+.ow-art * { transform-box: fill-box; transform-origin: center; }
+
+.ow-art-rays { animation: ow-spin 24s linear infinite; }
+.ow-art-drift { animation: ow-drift 7s ease-in-out infinite; }
+.ow-art-drift.is-back { animation-duration: 11s; animation-direction: reverse; opacity: .55; }
+.ow-art-fall { animation: ow-fall 1.5s linear infinite; animation-delay: var(--ow-fall-delay, 0s); }
+.ow-art-haze { animation: ow-haze 4.2s ease-in-out infinite; animation-delay: var(--ow-fall-delay, 0s); }
+.ow-art-bolt { animation: ow-bolt 2.6s steps(1, end) infinite; }
+.ow-art-stone { animation-duration: 1.9s; }
+
+@keyframes ow-spin { to { transform: rotate(360deg); } }
+@keyframes ow-drift {
+  0%, 100% { transform: translateX(-.9px); }
+  50%      { transform: translateX(.9px); }
+}
+@keyframes ow-fall {
+  0%       { transform: translateY(-2.4px); opacity: 0; }
+  28%      { opacity: 1; }
+  72%      { opacity: 1; }
+  100%     { transform: translateY(3.2px); opacity: 0; }
+}
+@keyframes ow-haze {
+  0%, 100% { transform: translateX(-1.6px); opacity: .45; }
+  50%      { transform: translateX(1.6px); opacity: .9; }
+}
+@keyframes ow-bolt {
+  0%, 62%  { opacity: 1; }
+  66%      { opacity: .12; }
+  70%      { opacity: 1; }
+  74%      { opacity: .12; }
+  78%, 100% { opacity: 1; }
+}
+
+/* 静止不是「暂停」，是一个状态：读数没更新时图标就不该在动。
+   缓存过期、取数失败、没填坐标，三种情况都走这里——用动效表达一个
+   没更新的读数，就是用展示效果编数据。 */
+.ow-art[data-still] * { animation: none; }
+
+/* 系统说了不要动效就不动，不管数据新不新。 */
+@media (prefers-reduced-motion: reduce) {
+  .ow-art * { animation: none; }
+}
+
+/* ---------- 设置弹窗 ---------- */
+
+/* 弹窗限高。原来这里只给 .ow-settings 设了 max-height:calc(100vh - 64px)，
+   却没动 .modal 自己的上限——Obsidian 的 .modal 封在 80vh 且 overflow:hidden，
+   于是这个面板被允许长得比弹窗还高：它自己不滚，多出来的部分被弹窗裁掉，
+   底下的「关闭」按钮点不到。项目里每个长弹窗都有这条 .modal 提限，只有它漏了。
+   改成和 .os-detail-modal 同一套：弹窗是 flex 列，面板在弹窗框内自己滚。 */
+.modal:has(.ow-settings) { width: min(560px, 94vw); max-height: calc(100vh - 32px); max-height: calc(100dvh - 32px); display: flex; flex-direction: column; min-height: 0; }
+.modal:has(.ow-settings) .modal-content { flex: 1 1 auto; max-height: none; min-height: 0; min-width: 0; display: flex; flex-direction: column; overflow: hidden; box-sizing: border-box; }
+.ow-settings { box-sizing: border-box; flex: 1 1 auto; min-height: 0; min-width: 0; overflow-y: auto; overflow-x: hidden; padding-bottom: 12px; }
+.ow-settings h2 { margin: 0 0 6px; }
+.ow-settings * { box-sizing: border-box; min-width: 0; }
+
+.ow-order { display: flex; flex-direction: column; gap: 4px; margin: 12px 0 4px; }
+.ow-order-row { display: flex; align-items: center; gap: 8px; padding: 5px 8px; border: 1px solid var(--background-modifier-border, var(--os-line)); border-radius: 7px; }
+.ow-order-label { display: flex; align-items: center; gap: 8px; flex: 1; min-width: 0; cursor: pointer; }
+.ow-settings .ow-move { min-height: 26px; padding: 2px 9px; cursor: pointer; box-shadow: none; }
+/* 上 / 下：按钮上的字就是它当前所在的那一段，点一下换到另一段。
+   不做成下拉——两个取值的东西用下拉，读起来比按钮本身还慢。 */
+.ow-settings .ow-slot { min-height: 26px; padding: 2px 10px; cursor: pointer; box-shadow: none; flex: none; font-size: var(--fs-meta); white-space: nowrap; }
+
+.ow-section { margin-top: 10px; border-top: 1px solid var(--background-modifier-border, var(--os-line)); padding-top: 10px; }
+.ow-section > summary { cursor: pointer; font-weight: 600; padding: 4px 0; }
+.ow-section > .ow-muted { margin: 4px 0 8px; }
+
+.ow-check { display: flex; align-items: center; gap: 8px; padding: 4px 0; flex-wrap: wrap; }
+.ow-check > span { flex: none; }
+.ow-wallpaper-visibility { flex-wrap: nowrap; }
+.ow-wallpaper-range { flex: 1 1 140px; min-width: 90px; accent-color: var(--os-accent-2); }
+.ow-wallpaper-value { flex: none; width: 3.5em; text-align: right; color: var(--os-body); font-variant-numeric: tabular-nums; }
+.ow-range-end { flex: none; font-size: var(--fs-meta); color: var(--os-body); }
+.ow-settings .ow-input { flex: 1; min-width: 90px; max-width: 100%; min-height: 30px; padding: 5px 8px; border-radius: 6px; font: inherit; }
+.ow-settings .ow-number { flex: none; width: 72px; }
+.ow-textarea { width: 100%; max-width: 100%; resize: vertical; min-height: 110px; max-height: 260px; font: inherit; line-height: 1.7; padding: 8px; border-radius: 6px; }
+
+.ow-count-editor { display: flex; flex-direction: column; gap: 6px; margin-bottom: 8px; }
+.ow-count-edit-row { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+.ow-settings .ow-quiet { min-height: 28px; padding: 4px 10px; cursor: pointer; box-shadow: none; }
+
+.ow-actions { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-top: 16px; padding-top: 10px; border-top: 1px solid var(--background-modifier-border, var(--os-line)); }
+.ow-save-state { font-size: var(--fs-meta); color: var(--os-accent-2); overflow-wrap: anywhere; }
+.ow-settings .ow-primary { min-height: 32px; padding: 6px 14px; cursor: pointer; background: var(--os-accent-2); color: var(--os-paper); border: 0; border-radius: 5px; }

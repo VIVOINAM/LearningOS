@@ -16,15 +16,15 @@ const VERSION = JSON.parse(fs.readFileSync(path.join(ROOT, "version.json"), "utf
 // 设计令牌唯一定义处，内联到每个插件的 styles.css 最前面。
 // 每个插件都带一份是故意的：模块可以单独停用，只启用其中一个时令牌也得在。
 const TOKENS = fs.readFileSync(path.join(ROOT, "shared", "tokens.css"), "utf8");
-// 共用组件（弹窗皮肤）同理：单独启用 codex-capture 时，它的弹窗也得长得对。
+// 共用组件（弹窗皮肤）同理：单独启用 l-os-capture 时，它的弹窗也得长得对。
 const COMPONENTS = fs.readFileSync(path.join(ROOT, "shared", "components.css"), "utf8");
-const STAGE_MODE = ARGS.includes("--stage") || process.env.CODEX_STAGE === "1";
+const STAGE_MODE = ARGS.includes("--stage") || process.env.LOS_STAGE === "1";
 const PLUGIN_ROOT = STAGE_MODE ? path.join(ROOT, "dist", "plugins") : path.join(VAULT, ".obsidian", "plugins");
 const COMMUNITY = path.join(VAULT, ".obsidian", "community-plugins.json");
 
 // 顺序即依赖顺序：所有者先加载，工作台最后绑定它们。
 const PLUGINS = require("./plugins");
-const OBSOLETE = ["codex-focus-timer", "codex-capture-v3", "codex-iteration-v3", "codex-workbench-v3", "codex-iteration"];
+const RETIRED = require("./retired");
 
 function updateCommunity(ids) {
   let list = [];
@@ -34,7 +34,7 @@ function updateCommunity(ids) {
   } catch (error) {
     console.warn(`[警告] 无法读取 community-plugins.json：${error.message}`);
   }
-  list = list.filter((id) => !OBSOLETE.includes(id));
+  list = list.filter((id) => !RETIRED.isRetired(id));
   for (const id of [...ids].reverse()) {
     if (!list.includes(id)) list.unshift(id);
   }
@@ -92,8 +92,11 @@ for (const id of PLUGINS) {
 if (failed) {
   process.exitCode = 1;
 } else {
-  if (!STAGE_MODE) updateCommunity(PLUGINS);
-  const obsoleteFound = OBSOLETE.filter((id) => fs.existsSync(path.join(PLUGIN_ROOT, id)));
+  if (!STAGE_MODE) {
+    RETIRED.migrateData(PLUGIN_ROOT, PLUGINS);
+    updateCommunity(PLUGINS);
+  }
+  const obsoleteFound = RETIRED.leftovers(PLUGIN_ROOT);
   if (obsoleteFound.length) {
     console.warn(`[提示] 仍在 plugins 目录中的旧插件：${obsoleteFound.join(", ")}（确认 Obsidian 退出后再删除）`);
   }

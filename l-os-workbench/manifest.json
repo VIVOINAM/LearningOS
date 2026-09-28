@@ -1,0 +1,8 @@
+{
+  "id": "l-os-workbench",
+  "name": "L-OS 学习控制台",
+  "minAppVersion": "1.5.0",
+  "description": "暖色固定视口工作台：十入口分组导航，四级排版阶梯。",
+  "author": "L-OS",
+  "isDesktopOnly": false
+}

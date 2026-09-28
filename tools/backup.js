@@ -1,7 +1,7 @@
 "use strict";
 
 /**
- * CODEX 离线备份
+ * L-OS 离线备份
  *
  * 全本地、不联网。把不可再生的 25MB 以两种格式写到**另一块物理磁盘**：
  *   1. git bundle —— 单文件，含完整历史，`git clone x.bundle` 即可还原；
@@ -26,7 +26,7 @@ const KEEP_BUNDLES = 5;
 // 不可再生的目录：自己写的笔记、代码、插件数据。课程文件/ 刻意排除。
 const MIRROR = [
   "00 工作台", "01 收件箱", "02 项目", "03 知识库", "04 创作",
-  "05 日记", "06 Codex", "07 归档", "08 插件开发", "99 模板",
+  "05 日记", "06 L-OS", "07 归档", "08 插件开发", "99 模板",
   "版本管理", "附件", "book", ".obsidian",
 ];
 const MIRROR_SKIP = new Set(["node_modules", "dist", "workspace.json", ".trash"]);
@@ -134,7 +134,7 @@ function main() {
     return;
   }
 
-  const dir = path.join(path.resolve(target), "CODEX专属-备份");
+  const dir = path.join(path.resolve(target), "L-OS专属-备份");
   fs.mkdirSync(dir, { recursive: true });
   console.log(`目标：${dir}（物理磁盘 ${targetDisk}，vault 在 ${vaultDisk}）\n`);
 
@@ -150,7 +150,7 @@ function main() {
   }
 
   // 2. bundle：一个文件装下整个历史。
-  const bundle = path.join(dir, `CODEX专属-${stamp()}.bundle`);
+  const bundle = path.join(dir, `L-OS专属-${stamp()}.bundle`);
   git(["bundle", "create", bundle, "--all"], { stdio: ["ignore", "ignore", "ignore"] });
   git(["bundle", "verify", bundle], { stdio: ["ignore", "ignore", "ignore"] });
   console.log(`[历史] ${path.basename(bundle)}  ${bytes(fs.statSync(bundle).size)}  已校验`);
@@ -178,12 +178,12 @@ function main() {
   if (old.length) console.log(`[清理] 删除 ${old.length} 份旧 bundle，保留最近 ${KEEP_BUNDLES} 份。`);
 
   fs.writeFileSync(path.join(dir, "如何还原.txt"), [
-    "CODEX专属 离线备份",
+    "L-OS专属 离线备份",
     "",
     `备份时间：${stamp()}`,
     "",
     "还原方式一（推荐，带完整历史）：",
-    "  git clone CODEX专属-<时间>.bundle CODEX专属",
+    "  git clone L-OS专属-<时间>.bundle L-OS专属",
     "",
     "还原方式二（没有 git 时）：",
     "  直接复制「明文镜像」文件夹，里面是可以用记事本打开的 .md 笔记。",

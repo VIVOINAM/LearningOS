@@ -1,8 +1,0 @@
-{
-  "id": "codex-study",
-  "name": "Codex 学习",
-  "minAppVersion": "1.5.0",
-  "description": "本地离线 PDF 学习：区域截图、坐标双链、可拖拽知识卡片。",
-  "author": "Codex",
-  "isDesktopOnly": false
-}

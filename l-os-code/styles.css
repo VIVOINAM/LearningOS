@@ -1,0 +1,74 @@
+/* L-OS 代码查看：.m 只读视图。
+ *
+ * 颜色全部跟着 Obsidian 当前主题走（--color-* / --text-*），不自带色值。
+ * 主题原色直接当字色太浅：默认浅色主题的绿在白底上只有 2.5:1，深色主题的蓝在它自己的底上 4.2:1。
+ * 所以每个着色都和正文色混一次——往正文色靠，在浅、深两套下都只会更远离底色：
+ * 浅色下 绿 5.8、紫 7.3、橙 5.4、蓝 8.7；深色下蓝 6.5，其余更高。注释用次要文字色而不是 faint（浅色下 faint 只有 2.3）。
+ */
+
+.cc-view {
+  --cc-kw: color-mix(in srgb, var(--color-purple) 60%, var(--text-normal));
+  --cc-str: color-mix(in srgb, var(--color-green) 55%, var(--text-normal));
+  --cc-num: color-mix(in srgb, var(--color-orange) 55%, var(--text-normal));
+  --cc-def: color-mix(in srgb, var(--color-blue) 55%, var(--text-normal));
+  padding: 0 !important;
+  background: var(--background-primary);
+}
+
+.cc-code {
+  padding: 16px 24px 48px 0;
+  font-family: var(--font-monospace);
+  font-size: calc(var(--font-text-size) * 0.9);
+  line-height: 1.6;
+  color: var(--text-normal);
+  tab-size: 4;
+  /* 连字会把 ~= <= 这类运算符画成一个符号，读代码时要看见原样字符。 */
+  font-variant-ligatures: none;
+}
+
+/* 行号是伪元素：选中复制时不会带上。 */
+.cc-line {
+  display: grid;
+  grid-template-columns: calc(var(--cc-digits, 2) * 1ch + 2.5ch) minmax(0, 1fr);
+}
+.cc-line::before {
+  content: attr(data-n);
+  padding-right: 1.5ch;
+  text-align: right;
+  color: var(--text-muted);
+  font-size: 0.85em;
+  line-height: calc(1.6em / 0.85);
+  user-select: none;
+}
+.cc-line:hover { background: var(--background-secondary); }
+
+/* 折行时续行缩到这一行代码的起点再往里 2 列，而不是退回行首——
+ * 嵌套三层的长 fprintf 折下来仍然看得出属于哪一层。 */
+.cc-src {
+  --cc-hang: calc(var(--cc-indent, 0ch) + 2ch);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  padding-left: var(--cc-hang);
+  text-indent: calc(-1 * var(--cc-hang));
+}
+/* 空行也要有一行高，否则连续空行会塌成一条缝。 */
+.cc-src:empty::after { content: " "; }
+
+.cc-view.is-nowrap .cc-code { width: max-content; min-width: 100%; }
+.cc-view.is-nowrap .cc-src { white-space: pre; overflow-wrap: normal; padding-left: 0; text-indent: 0; }
+/* 横向滚动时行号钉在左边。 */
+.cc-view.is-nowrap .cc-line::before { position: sticky; left: 0; background: var(--background-primary); }
+.cc-view.is-nowrap .cc-line:hover::before { background: var(--background-secondary); }
+
+.cc-kw { color: var(--cc-kw); font-weight: 600; }
+.cc-str { color: var(--cc-str); }
+.cc-num { color: var(--cc-num); }
+.cc-def { color: var(--cc-def); font-weight: 600; }
+.cc-com { color: var(--text-muted); font-style: italic; }
+
+/* %% 分节：MATLAB 编辑器里那条横线。 */
+.cc-line.is-section { margin-top: 0.9em; border-top: 1px solid var(--background-modifier-border); padding-top: 0.35em; }
+.cc-line.is-section:first-child { margin-top: 0; border-top: 0; padding-top: 0; }
+.cc-sec { font-weight: 700; color: var(--text-normal); }
+
+.workspace-leaf-content[data-type="l-os-code"] .view-action.is-active { color: var(--interactive-accent); }

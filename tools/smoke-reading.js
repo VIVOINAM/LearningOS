@@ -8,7 +8,7 @@ class Plugin{constructor(app,manifest){this.app=app;this.manifest=manifest;}load
 const original=Module._load;
 Module._load=function(name){if(name==='obsidian')return {Plugin,Modal,Notice:class{}};return original.apply(this,arguments);};
 global.window={setInterval:()=>0};
-const Focus=require('../codex-focus/main'),{ReadingFlow}=require('../codex-workbench/reading-flow'),{dueState}=require('../codex-workbench/due');
+const Focus=require('../l-os-focus/main'),{ReadingFlow}=require('../l-os-workbench/reading-flow'),{dueState}=require('../l-os-workbench/due');
 (async()=>{
   const app={workspace,vault:{adapter:{read:async()=>{throw Error('ENOENT');}}},plugins:{getPlugin:()=>focus}};
   const focus=new Focus(app,{id:'focus'});await focus.onload();
@@ -17,7 +17,7 @@ const Focus=require('../codex-focus/main'),{ReadingFlow}=require('../codex-workb
   workspace.activeLeaf=leaf;workspace.getLeavesOfType=()=>leaves;workspace.revealLeaf=async l=>{workspace.activeLeaf=l;};
   let checkpoint=0,tab='',home=0;
   const p={app,focusOwner:()=>focus,views:new Set([{setTab:async t=>{tab=t;}}]),activate:async()=>{home++;},study:{checkpoint:async()=>{checkpoint++;}}};
-  const flow=new ReadingFlow(p);workspace.on('codex-focus:finished',s=>flow.finished(s));
+  const flow=new ReadingFlow(p);workspace.on('l-os-focus:finished',s=>flow.finished(s));
   await Promise.all([flow.opened(file),flow.opened(file)]);
   const id=focus.state().id;assert.equal(focus.state().status,'running');assert.equal(flow.context.id,id);
   await flow.opened(file);assert.equal(focus.state().id,id);

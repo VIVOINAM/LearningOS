@@ -2,7 +2,7 @@
 const assert=require('node:assert/strict'),Module=require('node:module');
 const original=Module._load;
 Module._load=function(name){if(name==='obsidian')return {Plugin:class{},ItemView:class{},Modal:class{},Notice:class{},parseYaml:text=>Object.fromEntries(text.split('\n').filter(s=>s.includes(':')).map(s=>{const i=s.indexOf(':');return [s.slice(0,i).trim(),s.slice(i+1).trim()];}))};return original.apply(this,arguments);};
-const {FocusSelection}=require('../codex-workbench/focus-selection'),{openReading}=require('../shared/open-reading'),Workbench=require('../codex-workbench/main');
+const {FocusSelection}=require('../l-os-workbench/focus-selection'),{openReading}=require('../shared/open-reading'),Workbench=require('../l-os-workbench/main');
 (async()=>{
  const files=new Map(),events=[];let fail=false;
  const tasks=[{id:'a',text:'A'},{id:'b',text:'B'}];
@@ -23,7 +23,7 @@ const {FocusSelection}=require('../codex-workbench/focus-selection'),{openReadin
  const leaf={view:{file:{path:'a.md'}},setViewState:async s=>{state=s;}};
  const navigation={vault:{getAbstractFileByPath:()=>({extension:'md'})},workspace:{getLeavesOfType:()=>[leaf],getLeaf:()=>{created++;return leaf;},revealLeaf:async()=>{revealed++;}}};
  await openReading(navigation,'a.md');assert.equal(created,0);assert.equal(state.state.mode,'preview');assert.equal(revealed,1);
- const dashboard={getViewType:()=> 'codex-workbench'},source={view:{file:{path:'a.md'},getViewType:()=> 'markdown'},detach(){this.detached=(this.detached||0)+1;}};
+ const dashboard={getViewType:()=> 'l-os-workbench'},source={view:{file:{path:'a.md'},getViewType:()=> 'markdown'},detach(){this.detached=(this.detached||0)+1;}};
  let release;const pending=new Promise(r=>release=r);
  const home={app:{workspace:{activeLeaf:source}},views:new Set([{flushEdits:async()=>{},setTab:async t=>assert.equal(t,'today')}]),data:{timer:{status:'idle'}},readingFlow:{dismiss(){}},study:{checkpoint:async()=>{}},activate:async()=>pending,refresh:async()=>{}};
  const first=Workbench.prototype.returnHome.call(home),second=Workbench.prototype.returnHome.call(home);assert.equal(first,second);release();await first;assert.equal(source.detached,1);

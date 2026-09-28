@@ -1,7 +1,7 @@
 "use strict";
 
 /**
- * CODEX 3.0 lifecycle smoke test.
+ * L-OS 3.0 lifecycle smoke test.
  *
  * 它不替真实 Obsidian 实机验收，但会在 Node 中用最小 app/vault mock：
  * - 加载 dist/plugins 下的自包含 main.js；
@@ -48,14 +48,14 @@ class MockVault {
   constructor(legacy) {
     this.legacy = legacy;
     this.files = new Map();
-    // codex-study 5.2 起用 vault.adapter 直接读写元数据：stub 必须实现 exists 并真的存住写入，
+    // l-os-study 5.2 起用 vault.adapter 直接读写元数据：stub 必须实现 exists 并真的存住写入，
     // 否则插件一加载就抛 exists is not a function。
     this.written = new Map();
     this.adapter = {
       exists: async (p) => this.written.has(p) || this.files.has(p),
       read: async (p) => {
         if (this.written.has(p)) return this.written.get(p);
-        if (p === ".obsidian/plugins/codex-workbench/data.json" && this.legacy) {
+        if (p === ".obsidian/plugins/l-os-workbench/data.json" && this.legacy) {
           return JSON.stringify(this.legacy);
         }
         const error = new Error(`ENOENT: ${p}`);
@@ -164,30 +164,30 @@ async function main() {
 
   const app = makeApp(legacy);
 
-  const Focus = load("codex-focus");
-  const focus = new Focus(app, { id: "codex-focus", version: "3.0.0" });
-  app.plugins.plugins["codex-focus"] = focus;
+  const Focus = load("l-os-focus");
+  const focus = new Focus(app, { id: "l-os-focus", version: "3.0.0" });
+  app.plugins.plugins["l-os-focus"] = focus;
   await focus.onload();
   assert.equal(focus.state().task, "旧任务");
   assert.equal(focus.sessions().length, 1);
   assert.equal(focus.settings().focusMinutes, 50);
 
-  const Study = load("codex-study");
-  const study = new Study(app, { id: "codex-study", version: "3.0.0" });
-  app.plugins.plugins["codex-study"] = study;
+  const Study = load("l-os-study");
+  const study = new Study(app, { id: "l-os-study", version: "3.0.0" });
+  app.plugins.plugins["l-os-study"] = study;
   await study.onload();
   assert.ok(study.engine, "study engine should be created");
   assert.equal(study.data.study.records["book/a.pdf"].next, "继续");
   assert.equal(study.data.study.goal.minutes, 90);
   await study.run(() => study.engine.settle());
   await study.save();
-  const reloadedStudy=new Study(app,{id:'codex-study',version:'5.2.0'});
+  const reloadedStudy=new Study(app,{id:'l-os-study',version:'5.2.0'});
   await reloadedStudy.onload();
   assert.equal(reloadedStudy.data.study.records['book/a.pdf'].next,'继续');
   assert.ok(app.vault.getAbstractFileByPath('03 知识库/教材切片/学习元数据.json'));
 
-  const Capture = load("codex-capture");
-  const capture = new Capture(app, { id: "codex-capture", version: "3.0.0" });
+  const Capture = load("l-os-capture");
+  const capture = new Capture(app, { id: "l-os-capture", version: "3.0.0" });
   await capture.onload();
   assert.equal(typeof capture.taskModel.parseTaskLines, "function");
 

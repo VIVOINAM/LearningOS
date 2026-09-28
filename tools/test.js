@@ -22,7 +22,7 @@ for (const entry of fs.readdirSync(ROOT, { withFileTypes: true })) {
   }
 }
 
-// 构建工具自己的测试。此前 CHANGELOG 解析住在 codex-iteration/core 下，
+// 构建工具自己的测试。此前 CHANGELOG 解析住在 l-os-iteration/core 下，
 // 于是构建脚本要 require 一个插件的内部模块才能跑；现在它在 tools/ 里，测试跟过来。
 const toolTests = path.join(__dirname, "tests");
 if (fs.existsSync(toolTests)) {

@@ -90,6 +90,30 @@ const SCHEDULE_ANCHORS = [
   ["色标说明", ".os-course-key-row span", "玻璃卡"],
 ];
 
+/**
+ * 知识地图的导图。节点是实底（--os-mastery-*），和课块一样「照理不受壁纸影响」；
+ * 控件和概念卡压在玻璃和卡面上。四档各量一个节点，未学章是虚线框。
+ * 选中概念时其余节点故意变淡，那不是要读的字，所以这张表在没有选中时量，卡片另一张表量。
+ */
+const MAP_ANCHORS = [
+  ["导图 · 课程", ".os-mind-node.is-root", "实色节点"],
+  ["导图 · 章", ".os-mind-node.is-chapter:not(.is-planned)", "实色节点"],
+  ["导图 · 未学章", ".os-mind-node.is-planned", "实色节点"],
+  ["导图 · 待自评", ".os-mind-node.is-concept.is-unknown", "实色节点"],
+  ["导图 · 需巩固", ".os-mind-node.is-concept.is-review", "实色节点"],
+  ["导图 · 已理解", ".os-mind-node.is-concept.is-understood", "实色节点"],
+  ["导图 · 能应用", ".os-mind-node.is-concept.is-applied", "实色节点"],
+  ["导图 · 控件", ".os-mind-controls .os-button", "实色按钮"],
+  ["筛选未选", ".os-map-toolbar .os-segments .os-button:not(.is-active)", "玻璃槽"],
+];
+const MAP_CARD_ANCHORS = [
+  ["概念卡标题", ".os-mind-card h2", "卡面"],
+  ["概念卡依据", ".os-mind-card .os-concept-basis", "卡面"],
+  ["概念卡章节", ".os-mind-card .os-overline", "卡面"],
+  ["导图 · 要点", ".os-mind-node.is-leaf", "实色节点"],
+  ["导图 · 选中", ".os-mind-node.is-selected", "实色节点"],
+];
+
 function luminance(r, g, b) {
   const f = (v) => { v /= 255; return v <= 0.03928 ? v / 12.92 : Math.pow((v + 0.055) / 1.055, 2.4); };
   return 0.2126 * f(r) + 0.7152 * f(g) + 0.0722 * f(b);
@@ -197,7 +221,7 @@ function report(rows) {
   return { bad, worst, combos };
 }
 
-module.exports = { BACKDROPS, ANCHORS, SCHEDULE_ANCHORS, MIN, measure, report, ratio, luminance };
+module.exports = { BACKDROPS, ANCHORS, SCHEDULE_ANCHORS, MAP_ANCHORS, MAP_CARD_ANCHORS, MIN, measure, report, ratio, luminance };
 
 /* ---------------- 独立模式 ---------------- */
 
@@ -237,8 +261,8 @@ if (require.main === module) {
     await page.setContent(`<style>*{box-sizing:border-box}html,body{margin:0;height:100%}
       body{--font-interface:"Segoe UI","Microsoft YaHei",sans-serif}button,input{font:inherit}</style>${STANDALONE}`);
     await page.addStyleTag({ content: fs.readFileSync(path.join(ROOT, "shared/tokens.css"), "utf8") });
-    await page.addStyleTag({ content: fs.readFileSync(path.join(ROOT, "codex-workbench/styles.css"), "utf8") });
-    await page.addStyleTag({ content: fs.readFileSync(path.join(ROOT, "codex-widgets/styles.css"), "utf8") });
+    await page.addStyleTag({ content: fs.readFileSync(path.join(ROOT, "l-os-workbench/styles.css"), "utf8") });
+    await page.addStyleTag({ content: fs.readFileSync(path.join(ROOT, "l-os-widgets/styles.css"), "utf8") });
 
     const rows = await measure(page);
     const { bad, worst, combos } = report(rows);
